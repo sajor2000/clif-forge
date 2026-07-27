@@ -411,6 +411,9 @@ masters will be published at the project's planned home, **clif-icu.com** (not y
 live), so the consortium has one place to pull synthetic data for whichever CLIF
 version a study needs.
 
+A live copy of the landing page and the validation report is published via GitHub
+Pages at **https://sajor2000.github.io/clif-forge/** (source: [`site/`](site/)).
+
 ## Status
 
 The fit and generate stages, both population modes (ICU cohort and whole-hospital),
