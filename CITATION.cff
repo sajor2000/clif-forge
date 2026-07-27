@@ -17,8 +17,8 @@ authors:
 version: 0.1.0
 date-released: 2026-07-26
 license: MIT
-repository-code: "https://github.com/riccc-rush-lab/clif_synthetic_2.1"
-url: "https://github.com/riccc-rush-lab/clif_synthetic_2.1"
+repository-code: "https://github.com/sajor2000/clif-forge"
+url: "https://github.com/sajor2000/clif-forge"
 keywords:
   - CLIF
   - synthetic-data

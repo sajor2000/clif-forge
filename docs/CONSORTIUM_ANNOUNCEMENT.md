@@ -27,7 +27,7 @@ region while being provably synthetic (no real record leaves the fit stage).
 
 CLIF 2.1 today; the engine is built to add 3.0 and future versions.
 
-👉 Repo: https://github.com/riccc-rush-lab/clif_synthetic_2.1
+👉 Repo: https://github.com/sajor2000/clif-forge
 Feedback and presets welcome.
 
 ---
@@ -77,7 +77,7 @@ clif-icu.com.
 Everything — the method, the conformance guarantees, and a synthetic-vs-real
 validation report — is documented in the repo:
 
-👉 **https://github.com/riccc-rush-lab/clif_synthetic_2.1**
+👉 **https://github.com/sajor2000/clif-forge**
 
 It's an expansion of the consortium's `synthetic_clif`; the main addition is
 empirical fidelity (fitting to real aggregate statistics rather than hand-specified

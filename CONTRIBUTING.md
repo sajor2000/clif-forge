@@ -6,7 +6,7 @@ improvement, or support for a new CLIF version.
 
 ## Ways to contribute
 
-- **Report a problem or request a feature** — open a [GitHub issue](https://github.com/riccc-rush-lab/clif_synthetic_2.1/issues).
+- **Report a problem or request a feature** — open a [GitHub issue](https://github.com/sajor2000/clif-forge/issues).
   For data-quality issues, please say which dataset/preset and CLIF version, and
   attach the `manifest.json` from the affected output.
 - **Share a preset or spec** — if you've built a recipe that models a useful
@@ -30,7 +30,7 @@ improvement, or support for a new CLIF version.
 ## Development setup
 
 ```bash
-git clone https://github.com/riccc-rush-lab/clif_synthetic_2.1.git
+git clone https://github.com/sajor2000/clif-forge.git
 cd clif_synthetic_2.1
 uv sync --extra dev          # or: pip install -e ".[dev,eval]"
 uv run pytest -q             # run the test suite

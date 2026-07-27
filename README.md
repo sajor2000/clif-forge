@@ -55,7 +55,7 @@ data, no credential, no fit. The shareable base pack (calibrated to real CLIF)
 ships inside the package, so the output lands in the real statistical region:
 
 ```bash
-pip install git+https://github.com/riccc-rush-lab/clif_synthetic_2.1.git
+pip install git+https://github.com/sajor2000/clif-forge.git
 
 # an ICU cohort (network-median defaults) —
 clif-forge generate --preset high-acuity --n-patients 5000 --out ./my-icu
@@ -87,7 +87,7 @@ samples are committed (`sample_dataset/` ICU, `sample_full_hospital/` whole-hosp
 and the full-size masters regenerate from `base_pack/` on demand:
 
 ```bash
-git clone https://github.com/riccc-rush-lab/clif_synthetic_2.1.git
+git clone https://github.com/sajor2000/clif-forge.git
 ```
 
 **Is it clinically believable?** See the
