@@ -22,6 +22,23 @@ aggregate CLIF statistics so its output lands in the real statistical region —
 close enough to train models against — while being provably synthetic (no real
 record leaves the fit stage; no synthetic record traces back to a real patient).
 
+**Live site:** https://sajor2000.github.io/clif-forge/ · **New here?** Jump to
+[Two ways to use it](#two-ways-to-use-it) or the [Quickstart](#quickstart-for-clif-researchers).
+
+## Contents
+
+- [Two ways to use it](#two-ways-to-use-it) — use the data, or make your own
+- [Quickstart](#quickstart-for-clif-researchers) — install and generate in one command
+- [How it stays synthetic](#how-it-stays-synthetic) — the method, and why it's safe to share
+- [Usage](#usage) — the `generate` command in full
+- [System requirements](#system-requirements) — runs on a laptop; RAM/CPU dials
+- [Data available off the shelf](#data-available-off-the-shelf) — what's committed + the full masters
+- [Ideate your own CLIF-like dataset](#ideate-your-own-clif-like-dataset) — presets, specs, the levers
+- [Evaluation](#evaluation) — utility, privacy, fidelity
+- [Repository layout](#repository-layout) — what's in each folder
+- [CLIF versions & roadmap](#clif-versions--roadmap) — 2.1 today, built for 3.0+
+- [Status](#status) · [Provenance & licensing](#provenance--licensing)
+
 ## Two ways to use it
 
 **1. Use the ready-made datasets — as-is.** Real-looking, CLIF 2.1-conformant, and
@@ -414,6 +431,24 @@ version a study needs.
 
 A live copy of the landing page and the validation report is published via GitHub
 Pages at **https://sajor2000.github.io/clif-forge/** (source: [`site/`](site/)).
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| [`src/clifforge/`](src/clifforge) | The package — `fit`, `generate`, `conformance`, `eval`, the `ui` Cohort Designer, and the CLI |
+| [`base_pack/`](base_pack) | The shareable aggregate parameter pack (no real data) that seeds every dataset — with `PROVENANCE.md` + `manifest.json` |
+| [`sample_dataset/`](sample_dataset) | Committed ICU sample (~10k encounters) — its own `README.md` + `manifest.json` + `spec.toml` |
+| [`sample_full_hospital/`](sample_full_hospital) | Committed whole-hospital sample (~8k) — same layout |
+| [`demo_output/`](demo_output) | Tiny hand-specified demo (n=100) with a generated `REPORT.md` + `PROVENANCE.md` |
+| [`presets/`](presets) | Shipped example recipes (`high-acuity`, `older-cohort`, `sepsis-heavy`) — see [`presets/README.md`](presets/README.md) |
+| [`scripts/`](scripts) | Deliverable generation, base-pack build, synthetic-vs-real validation, release gate |
+| [`site/`](site) | The landing page + validation report (published to GitHub Pages) |
+| [`docs/`](docs) | Reproducibility, the consortium announcement, and design plans — see [`docs/README.md`](docs/README.md) |
+| [`tests/`](tests) | Test suite (conformance, fit, generate, eval, CLI) |
+
+Every committed dataset carries a `manifest.json` (recipe, seed, per-table content
+hashes), so it is reproducible from its recipe and any two datasets are provably distinct.
 
 ## Status
 
