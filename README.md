@@ -226,8 +226,9 @@ version, and per-table SHA-256 content hashes.
 **Full-size masters.** The complete datasets — an **85k ICU cohort** and a **365k
 whole-hospital population** — are too large to commit here. Download them directly:
 
-<!-- Replace the line below with the shared download link (e.g. Dropbox). -->
-> 📥 **Full datasets:** _link coming soon_
+> 📥 **Full datasets (Dropbox):**
+> [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0)
+> — each dataset folder includes a `CONTENTS.json` (per-table row counts + SHA-256) for post-download integrity checks.
 
 They are also reproducible from `base_pack/` on demand (see below), so the shared
 files and a local regeneration match by content hash.

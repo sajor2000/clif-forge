@@ -1,7 +1,8 @@
 # CLIFForge — consortium announcement (copy-paste ready)
 
-Two versions below: a short Slack post and a longer email. Fill in the
-`[full-datasets link]` once the masters are hosted (Dropbox / clif-icu.com).
+Two versions below: a short Slack post and a longer email. The full-size masters
+are hosted on Dropbox and the link is already embedded below — just copy, paste,
+and send.
 
 ---
 
@@ -16,7 +17,7 @@ and model/agent development.
 
 Two ways to use it:
 1. **Grab the ready-made data** — realistic, CLIF 2.1-conformant samples are in the
-   repo; full-size 85k-ICU and 365k whole-hospital masters at [full-datasets link].
+   repo; full-size 85k-ICU and 365k whole-hospital masters at https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0.
 2. **Make your own** — `pip install`, tweak a short recipe, and generate a *distinct*
    but still-realistic cohort. You control the levers: population shape (ICU vs.
    whole-hospital), size, demographics, illness rates, and compute footprint.
@@ -49,7 +50,7 @@ teaching material, reproducible demos, and model or agent development.
 1. **Use the ready-made datasets, as-is.** Realistic, CLIF 2.1-conformant samples
    (an ICU cohort and a whole-hospital population) are committed in the repo — clone
    and go. Full-size masters (an 85k-encounter ICU cohort and a 365k whole-hospital
-   population) are available at [full-datasets link].
+   population) are available at https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0.
 
 2. **Pull the levers and generate your own.** Each dataset is a *recipe* you can
    change. Install the package, edit a short TOML spec, and generate a cohort that is
