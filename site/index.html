@@ -138,6 +138,50 @@
     letter-spacing: 0; }
   .feat p { margin: 0; color: var(--text-soft); font-size: 0.95rem; }
 
+  /* how it works — method pipeline */
+  .pipe { display: flex; align-items: stretch; gap: 8px; margin: 6px 0 22px; }
+  .pipe .stage { flex: 1 1 0; min-width: 0; background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px 20px; display: flex; flex-direction: column; }
+  .pipe .stage .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--teal-deep); margin-bottom: 10px; }
+  .pipe .stage h3 { font-family: var(--sans); font-size: 1.02rem; font-weight: 700;
+    letter-spacing: 0; margin: 0 0 8px; }
+  .pipe .stage p { margin: 0; color: var(--text-soft); font-size: 0.9rem; line-height: 1.5; }
+  .pipe .arw { flex: none; align-self: center; display: flex; flex-direction: column;
+    align-items: center; gap: 5px; color: var(--teal); }
+  .pipe .arw em { font-family: var(--mono); font-size: 10px; font-style: normal;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); }
+  .pipe-note { display: flex; gap: 9px; align-items: baseline; margin: 0 0 42px;
+    font-size: 0.9rem; color: var(--text-soft); }
+  .pipe-note b { color: var(--text); font-weight: 650; }
+  @media (prefers-color-scheme: dark) { .pipe .stage .k { color: var(--teal); } }
+  :root[data-theme="dark"] .pipe .stage .k { color: var(--teal); }
+
+  /* how it works — usage steps */
+  .steps { list-style: none; padding: 0; margin: 0;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .steps li { display: flex; gap: 14px; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .steps .step-n { flex: none; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--teal-soft); color: var(--teal-deep); font-family: var(--mono);
+    font-weight: 700; font-size: 0.9rem; display: grid; place-items: center; }
+  .steps h3 { font-family: var(--sans); font-size: 1rem; font-weight: 700;
+    letter-spacing: 0; margin: 2px 0 5px; }
+  .steps p { margin: 0; color: var(--text-soft); font-size: 0.9rem; }
+  .steps code { font-family: var(--mono); font-size: 0.82rem; background: var(--teal-soft);
+    color: var(--teal-deep); padding: 1px 6px; border-radius: 5px; }
+  @media (prefers-color-scheme: dark) {
+    .steps .step-n, .steps code { color: var(--teal); }
+  }
+  :root[data-theme="dark"] .steps .step-n,
+  :root[data-theme="dark"] .steps code { color: var(--teal); }
+  @media (max-width: 760px) {
+    .pipe { flex-direction: column; }
+    .pipe .arw { flex-direction: row; }
+    .pipe .arw svg { transform: rotate(90deg); }
+    .steps { grid-template-columns: 1fr; }
+  }
+
   /* levers table */
   .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
   table { border-collapse: collapse; width: 100%; font-size: 0.95rem; min-width: 460px; }
@@ -207,7 +251,7 @@
       No data-use agreement.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/sajor2000/clif-forge">View the repository →</a>
-      <a class="btn btn-ghost" href="#two-ways">See how it works</a>
+      <a class="btn btn-ghost" href="#how">See how it works</a>
     </div>
     <div class="hero-badges">
       <span><i class="dot"></i>CLIF 2.1 today</span>
@@ -217,6 +261,66 @@
     </div>
   </div>
 </header>
+
+<section id="how">
+  <div class="wrap">
+    <p class="section-label">How it works</p>
+    <h2>From aggregate stats to a dataset you can share</h2>
+    <p class="section-intro">CLIFForge fits a compact parameter pack to <em>aggregate</em>
+      CLIF statistics, then samples whole hospitalizations offline — so the output lands
+      in the real statistical region while staying provably synthetic.</p>
+
+    <div class="pipe">
+      <div class="stage">
+        <span class="k">01 · Real aggregates</span>
+        <h3>Fit from CLIF statistics</h3>
+        <p>Marginals, couplings, and state transitions are fitted from <em>aggregate</em>
+          statistics only — never row-level records.</p>
+      </div>
+      <span class="arw"><svg width="42" height="16" viewBox="0 0 42 16" aria-hidden="true"><path d="M0 8H36M30 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><em>fit</em></span>
+      <div class="stage">
+        <span class="k">02 · Parameter pack</span>
+        <h3>A shareable, versioned pack</h3>
+        <p>Distributions and couplings condense to a versioned pack (~84&nbsp;KB). No real
+          data lives inside it.</p>
+      </div>
+      <span class="arw"><svg width="42" height="16" viewBox="0 0 42 16" aria-hidden="true"><path d="M0 8H36M30 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><em>sample</em></span>
+      <div class="stage">
+        <span class="k">03 · Latent acuity spine</span>
+        <h3>Coupled patient trajectories</h3>
+        <p>Each synthetic stay follows an internal acuity trajectory, keeping vitals,
+          labs, and organ support coupled (vasopressors&nbsp;↔&nbsp;hypotension).</p>
+      </div>
+      <span class="arw"><svg width="42" height="16" viewBox="0 0 42 16" aria-hidden="true"><path d="M0 8H36M30 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><em>emit</em></span>
+      <div class="stage">
+        <span class="k">04 · Sampled CLIF tables</span>
+        <h3>CLIF 2.1-conformant Parquet</h3>
+        <p>Offline sampling emits 19 gated CLIF tables as Parquet — clinically coherent,
+          and provably synthetic.</p>
+      </div>
+    </div>
+    <p class="pipe-note">🔒&nbsp;<span><b>Private by construction.</b> Generation samples from
+      aggregate parameters and never copies a record — no synthetic patient traces back to
+      a real one.</span></p>
+
+    <ol class="steps" aria-label="How to use it">
+      <li>
+        <span class="step-n">1</span>
+        <div><h3>Choose</h3><p>Grab the ready-made data, or write a short TOML recipe.</p></div>
+      </li>
+      <li>
+        <span class="step-n">2</span>
+        <div><h3>Generate or grab</h3><p>Run <code>clif-forge&nbsp;generate</code>, or
+          <code>git&nbsp;clone</code> the committed samples.</p></div>
+      </li>
+      <li>
+        <span class="step-n">3</span>
+        <div><h3>Inspect &amp; validate</h3><p>Parquet per table, plus the
+          <a href="validation.html">synthetic-vs-real report</a>.</p></div>
+      </li>
+    </ol>
+  </div>
+</section>
 
 <section id="two-ways">
   <div class="wrap">
