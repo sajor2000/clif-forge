@@ -82,9 +82,10 @@ printf 'name = "my-hospital"\nmode = "full_hospital"\n' > hospital.toml
 clif-forge generate --spec hospital.toml --n-patients 20000 --out ./my-hospital
 ```
 
-Output is one `clif_<table>.parquet` per CLIF 2.1 table — load it with your usual
-CLIF tooling. Tune any of the [rules](#each-modes-default-rules--and-how-to-change-them)
-(size, demographics, illness rates, population shape) via a TOML spec.
+Output is one `clif_<table>_2.1_<beta|concept>.parquet` per CLIF 2.1 table — load
+it with your usual CLIF tooling. Tune any of the
+[rules](#each-modes-default-rules--and-how-to-change-them) (size, demographics,
+illness rates, population shape) via a TOML spec.
 
 **Not sure what to type?** Two commands make the terminal path self-explanatory:
 
@@ -183,9 +184,13 @@ A single `--seed` reproduces byte-identical output. Every table is run through
 the conformance gate before anything is written; any validation failure exits
 nonzero and writes nothing.
 
-Output is one `clif_<table>.parquet` per table, plus `clif_truth.parquet` — the
+Output is one `clif_<table>_2.1_<maturity>.parquet` per CLIF table — `beta` or
+`concept` from that table's CLIF maturity badge — plus `_truth.parquet`, the
 latent acuity spine behind each encounter, which makes the dataset usable as a
-benchmark with free ground-truth labels.
+benchmark with free ground-truth labels. The spine is **not** a CLIF table and
+deliberately does not carry the `clif_` prefix: every `clif_*.parquet` in an output
+directory is a real CLIF 2.1 table, so `glob("clif_*.parquet")` is a safe way to
+load the dataset without picking up generator internals.
 
 **The id-type rule (hardcoded, applied to every dataset):** `patient_id`,
 `hospitalization_id`, and `hospitalization_joined_id` are always emitted as

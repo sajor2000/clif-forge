@@ -116,8 +116,17 @@ def _icu_cohort(adt: pl.LazyFrame | None) -> set[str]:
 # Real-data discovery (KTD-1: confined to this module)
 # --------------------------------------------------------------------------- #
 def _find_table(real_dir: Path, table: str) -> Path | None:
-    """Locate a CLIF table file, tolerating the ``clif_`` prefix and csv/parquet."""
-    for stem in (f"clif_{table}", table):
+    """Locate a CLIF table file under ``real_dir``.
+
+    Accepts the maturity-tagged forge layout (``clif_<table>_2.1_<maturity>``),
+    the untagged consortium layout (``clif_<table>``), and a bare ``<table>``
+    stem — real site extracts use the untagged form; forge-generated packs use
+    the tagged one.
+    """
+    from clifforge.generate.filenames import table_parquet_stem
+
+    stems = (table_parquet_stem(table), f"clif_{table}", table)
+    for stem in stems:
         for ext in (".parquet", ".csv"):
             candidate = real_dir / f"{stem}{ext}"
             if candidate.exists():

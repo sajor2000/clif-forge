@@ -36,11 +36,13 @@ def write_manifest(out_dir: str | Path, *, spec: dict[str, Any] | str, seed: int
     """Write ``manifest.json`` into ``out_dir`` and return it.
 
     ``spec`` is the resolved variant spec (a dict) or the string ``"master"``.
-    Each ``clif_*.parquet`` in the directory contributes a ``{rows, sha256}`` entry.
+    Every ``*.parquet`` in the directory contributes a ``{rows, sha256}`` entry — the
+    ``clif_<table>_2.1_<maturity>`` files and the non-CLIF ``_truth`` spine alike, so
+    the whole deliverable is hash-auditable.
     """
     out = Path(out_dir)
     tables: dict[str, dict[str, Any]] = {}
-    for parquet in sorted(out.glob("clif_*.parquet")):
+    for parquet in sorted(out.glob("*.parquet")):
         rows = pl.scan_parquet(parquet).select(pl.len()).collect().item()
         tables[parquet.stem] = {"rows": int(rows), "sha256": _sha256(parquet)}
     manifest: dict[str, Any] = {

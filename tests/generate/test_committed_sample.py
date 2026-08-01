@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from clifforge.fit.param_pack import ParamPack
+from clifforge.generate.filenames import table_parquet_path
 from clifforge.generate.orchestrator import generate_dataset
 from clifforge.variants import load_spec, spec_to_pack
 
@@ -16,7 +17,7 @@ _FULL_SAMPLE = Path("sample_full_hospital")
 _BASE = Path("base_pack")
 
 pytestmark = pytest.mark.skipif(
-    not (_SAMPLE / "clif_hospitalization.parquet").exists() or not _BASE.exists(),
+    not table_parquet_path(_SAMPLE, "hospitalization").exists() or not _BASE.exists(),
     reason="requires the committed sample and base pack",
 )
 
@@ -35,7 +36,7 @@ def test_committed_sample_reproduces_from_its_recipe() -> None:
     )
     ids = list(range(1, 31))  # 1-based int hospitalization ids
     committed = (
-        pl.read_parquet(_SAMPLE / "clif_hospitalization.parquet")
+        pl.read_parquet(table_parquet_path(_SAMPLE, "hospitalization"))
         .filter(pl.col("hospitalization_id").is_in(ids))
         .sort("hospitalization_id")
     )
@@ -43,7 +44,7 @@ def test_committed_sample_reproduces_from_its_recipe() -> None:
 
 
 @pytest.mark.skipif(
-    not (_FULL_SAMPLE / "clif_hospitalization.parquet").exists(),
+    not table_parquet_path(_FULL_SAMPLE, "hospitalization").exists(),
     reason="requires the committed full-hospital sample",
 )
 def test_committed_full_hospital_sample_reproduces_from_its_recipe() -> None:
@@ -59,7 +60,7 @@ def test_committed_full_hospital_sample_reproduces_from_its_recipe() -> None:
     )
     ids = list(range(1, 31))  # 1-based int hospitalization ids
     committed = (
-        pl.read_parquet(_FULL_SAMPLE / "clif_hospitalization.parquet")
+        pl.read_parquet(_FULLtable_parquet_path(_SAMPLE, "hospitalization"))
         .filter(pl.col("hospitalization_id").is_in(ids))
         .sort("hospitalization_id")
     )

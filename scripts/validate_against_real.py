@@ -26,6 +26,8 @@ from typing import Any
 
 import polars as pl
 
+from clifforge.generate.filenames import table_parquet_path
+
 _QUANTS = (0.1, 0.25, 0.5, 0.75, 0.9)
 _ABG = ["po2_arterial", "pco2_arterial", "ph_arterial", "so2_arterial"]
 _PRESENCE_LABS = ["lactate", "ph_arterial", "creatinine", "sodium", "hemoglobin", "troponin_t"]
@@ -71,27 +73,33 @@ def _trajectory(
     }
 
 
+def _table(root: Path, table: str) -> Path:
+    """Prefer the forge maturity-tagged name; fall back to the untagged consortium form."""
+    tagged = table_parquet_path(root, table)
+    if tagged.exists():
+        return tagged
+    return root / f"clif_{table}.parquet"
+
+
 def validate(synthetic: Path, real: Path) -> dict[str, Any]:
-    shosp = pl.read_parquet(synthetic / "clif_hospitalization.parquet")
+    shosp = pl.read_parquet(_table(synthetic, "hospitalization"))
     sn = shosp["hospitalization_id"].n_unique()
 
-    radt = pl.read_parquet(real / "clif_adt.parquet")
+    radt = pl.read_parquet(_table(real, "adt"))
     icu = radt.filter(pl.col("location_category") == "icu")["hospitalization_id"].unique()
-    rhosp = pl.read_parquet(real / "clif_hospitalization.parquet").filter(
+    rhosp = pl.read_parquet(_table(real, "hospitalization")).filter(
         pl.col("hospitalization_id").is_in(icu)
     )
     rn = rhosp["hospitalization_id"].n_unique()
 
-    slab = pl.read_parquet(synthetic / "clif_labs.parquet")
-    rlab = pl.read_parquet(real / "clif_labs.parquet").filter(
-        pl.col("hospitalization_id").is_in(icu)
-    )
+    slab = pl.read_parquet(_table(synthetic, "labs"))
+    rlab = pl.read_parquet(_table(real, "labs")).filter(pl.col("hospitalization_id").is_in(icu))
     srs = pl.read_parquet(
-        synthetic / "clif_respiratory_support.parquet",
+        _table(synthetic, "respiratory_support"),
         columns=["hospitalization_id", "device_category"],
     )
     rrs = pl.read_parquet(
-        real / "clif_respiratory_support.parquet", columns=["hospitalization_id", "device_category"]
+        _table(real, "respiratory_support"), columns=["hospitalization_id", "device_category"]
     ).filter(pl.col("hospitalization_id").is_in(icu))
 
     def dev(rs: pl.DataFrame, d: str, n: int) -> float:
@@ -100,7 +108,7 @@ def validate(synthetic: Path, real: Path) -> dict[str, Any]:
         )
 
     def crrt(base: Path, ids: pl.Series | None, n: int) -> float:
-        c = pl.read_parquet(base / "clif_crrt_therapy.parquet", columns=["hospitalization_id"])
+        c = pl.read_parquet(_table(base, "crrt_therapy"), columns=["hospitalization_id"])
         if ids is not None:
             c = c.filter(pl.col("hospitalization_id").is_in(ids))
         return round(c["hospitalization_id"].n_unique() / n, 3)
@@ -152,7 +160,7 @@ def validate(synthetic: Path, real: Path) -> dict[str, Any]:
             out["value_fidelity"][lab] = {"synthetic_p10_50_90": sq, "real_p10_50_90": rq}
 
     svit = pl.read_parquet(
-        synthetic / "clif_vitals.parquet",
+        _table(synthetic, "vitals"),
         columns=["hospitalization_id", "recorded_dttm", "vital_category", "vital_value"],
     ).filter(pl.col("vital_category") == "map")
     scr = slab.filter(pl.col("lab_category") == "creatinine").select(

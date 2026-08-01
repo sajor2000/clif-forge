@@ -32,9 +32,9 @@ The result matches this directory byte-for-byte (compare `manifest.json` hashes)
 
 ## Files
 
-One `clif_<table>.parquet` per CLIF 2.1 table, plus `clif_truth.parquet`
-(synthetic-only latent labels for benchmarking), `manifest.json` (provenance +
-hashes), and `spec.toml` (the recipe). See `../DATA_DICTIONARY`-style column details
-in the tables themselves.
-
-Not real data — do not use for clinical decisions or epidemiologic conclusions.
+One `clif_<table>_2.1_<beta|concept>.parquet` per CLIF 2.1 table, plus
+`_truth.parquet` (synthetic-only latent labels for benchmarking), `manifest.json`
+(provenance + hashes), and `spec.toml` (the recipe). Only real CLIF 2.1 tables
+carry the `clif_` prefix, so `glob("clif_*.parquet")` loads the dataset without
+picking up the spine. See `../DATA_DICTIONARY`-style column details in the tables
+themselves.

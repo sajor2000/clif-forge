@@ -80,7 +80,15 @@ from clifforge.generate.tables.therapy_details import sample_therapy_details, th
 from clifforge.generate.tables.transfusion import sample_transfusion, transfusion_frame
 from clifforge.generate.tables.vitals import sample_vitals, vitals_frame
 
-__all__ = ["GeneratedDataset", "generate_dataset", "write_dataset"]
+from clifforge.generate.filenames import table_parquet_filename, table_parquet_path
+
+__all__ = ["TRUTH_FILENAME", "GeneratedDataset", "generate_dataset", "write_dataset"]
+
+#: Filename for the retained latent spine. It deliberately does **not** carry the
+#: ``clif_`` prefix: the spine is not a CLIF table, and every ``clif_*.parquet`` in
+#: an output directory must be a real CLIF 2.1 table
+#: (``clif_<table>_2.1_<beta|concept>.parquet``).
+TRUTH_FILENAME = "_truth.parquet"
 
 #: Admissions are spread across a two-year calendar at second resolution, so
 #: timestamps are realistic and collisions stay vanishingly rare even at large n
@@ -238,16 +246,16 @@ def write_dataset(
     *,
     write_truth: bool = True,
 ) -> list[Path]:
-    """Write each table to ``clif_<table>.parquet`` (+ the truth spine). Returns paths."""
+    """Write each CLIF table to ``clif_<table>_2.1_<maturity>.parquet`` (+ ``_truth.parquet``)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for name, frame in dataset.tables.items():
-        path = out / f"clif_{name}.parquet"
+        path = table_parquet_path(out, name)
         frame.write_parquet(path)
         written.append(path)
     if write_truth:
-        path = out / "clif_truth.parquet"
+        path = out / TRUTH_FILENAME
         dataset.truth.write_parquet(path)
         written.append(path)
     return written
@@ -300,7 +308,7 @@ def generate_streaming(
     written: list[Path] = []
     for name in table_names:
         part_files = sorted((parts / name).glob("part_*.parquet"))
-        dest = out / f"clif_{name}.parquet"
+        dest = out / (TRUTH_FILENAME if name == "truth" else table_parquet_filename(name))
         pl.scan_parquet(part_files).sink_parquet(dest)  # streamed concat, bounded memory
         written.append(dest)
     shutil.rmtree(parts, ignore_errors=True)
