@@ -1,15 +1,15 @@
-# Committed synthetic CLIF 2.1 sample (~10,000 encounters)
+# Committed synthetic CLIF 2.1 sample (~5,000 encounters)
 
 A **fully synthetic**, CLIF 2.1–conformant sample committed directly to the repo —
-the largest that stays under GitHub's 100 MB/file limit (vitals ≈ 87 MB). It lets
-you inspect realistic, multi-table output and test code without generating anything
-or holding any credential.
+sized so every file stays under GitHub's **50 MB soft limit** (vitals ≈ 42 MB). It
+lets you inspect realistic, multi-table output and test code without generating
+anything or holding any credential.
 
-- **10,000 ICU encounters**, ~15.4M rows, ~150 MB, 29 parquet files — **all 28
+- **5,000 ICU encounters**, ~8.9M rows, ~76 MB, 29 parquet files — **all 28
   tables defined by the canonical CLIF 2.1 DDL**, plus `_truth.parquet`, a
   synthetic-only benchmarking artifact that is not a CLIF table.
 - A representative draw of the shared **master** dataset (same generator, same
-  network-median statistics).
+  network-median statistics, smaller `n`).
 
 ## Guarantees
 
@@ -36,7 +36,7 @@ or holding any credential.
 ```bash
 uv run clif-forge generate \
     --spec sample_dataset/spec.toml --base-pack base_pack \
-    --n-patients 10000 --seed 42 --out ./reproduced
+    --n-patients 5000 --seed 42 --out ./reproduced
 ```
 
 The result matches this directory byte-for-byte (compare `manifest.json` hashes).

@@ -24,13 +24,13 @@ Each stage is a documented function with no hidden state:
 
 ## Reproduce the committed artifacts
 
-**The ICU sample** (`sample_dataset/`, ~10k encounters) — reproduces byte-for-byte
+**The ICU sample** (`sample_dataset/`, ~5k encounters) — reproduces byte-for-byte
 from the committed base pack, spec, and seed:
 
 ```bash
 uv run clif-forge generate \
     --spec sample_dataset/spec.toml --base-pack base_pack \
-    --n-patients 10000 --seed 42 --out ./reproduced
+    --n-patients 5000 --seed 42 --out ./reproduced
 # reproduced/manifest.json content hashes == sample_dataset/manifest.json
 ```
 

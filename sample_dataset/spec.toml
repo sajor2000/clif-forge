@@ -1,2 +1,3 @@
-# Master-equivalent sample: reproduces the shared master dataset at n=10000, seed 42.
+# Master-equivalent sample: same recipe as the shared master, committed at n=5000
+# / seed 42 so every parquet stays under GitHub's 50 MB soft limit (vitals ≈ 42 MB).
 name = "master-sample"
