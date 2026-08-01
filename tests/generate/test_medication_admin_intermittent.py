@@ -117,6 +117,7 @@ def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:
 
 def test_module_exports() -> None:
     assert set(mai.__all__) == {
+        "ORDERED_INTERVAL_HOURS",
         "MedIntermittentRow",
         "medication_admin_intermittent_frame",
         "sample_medication_admin_intermittent",

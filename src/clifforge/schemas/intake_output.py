@@ -16,10 +16,10 @@ from clifforge.schemas import base
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
         "hospitalization_id": base.numeric_id_column(),
-        "intake_dttm": base.string(),
+        "intake_dttm": base.utc_datetime(),
         "fluid_name": base.string(),
-        "amount": base.string(),
-        "in_out_flag": base.string(),
+        "amount": base.plain_float(),
+        "in_out_flag": base.integer(),
     },
     strict=False,
     coerce=False,

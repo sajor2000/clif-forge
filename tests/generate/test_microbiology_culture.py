@@ -61,12 +61,50 @@ def test_categories_are_exact_mcide_members() -> None:
     fluid_ok = set(categories("microbiology_culture", "fluid_category"))
     method_ok = set(categories("microbiology_culture", "method_category"))
     group_ok = set(categories("microbiology_culture", "organism_group"))
+    organism_ok = set(categories("microbiology_culture", "organism_category"))
     events = _cohort(pack, np.random.default_rng(2), 60)
     assert events
     for e in events:
         assert e.fluid_category in fluid_ok
         assert e.method_category in method_ok
         assert e.organism_group in group_ok
+        if e.organism_category is not None:
+            assert e.organism_category in organism_ok
+
+
+def test_organism_species_and_group_are_drawn_as_a_matched_pair() -> None:
+    """A species must be filed under its own group, not an unrelated one.
+
+    The two mCIDE lists have no crosswalk, so sampling them independently would
+    yield rows that are individually valid and jointly nonsense (E. coli reported
+    under the staphylococcus group).
+    """
+    pack = _pack()
+    for e in _cohort(pack, np.random.default_rng(6), 200):
+        if e.organism_category is None:
+            assert e.organism_group == mc.NO_GROWTH
+        else:
+            assert e.organism_group == mc._ORGANISM_GROUP[e.organism_category]
+
+
+def test_organism_id_is_present_exactly_when_something_grew() -> None:
+    """``organism_id`` links a culture to its sensitivities; no isolate, no id."""
+    pack = _pack()
+    events = _cohort(pack, np.random.default_rng(7), 200)
+    grew = [e for e in events if e.grew_organism]
+    assert grew and len(grew) < len(events)  # both branches exercised
+    for e in events:
+        assert (e.organism_id is not None) == e.grew_organism
+    assert len({e.organism_id for e in grew}) == len(grew)  # unique per isolate
+
+
+def test_patient_id_is_carried_alongside_hospitalization_id() -> None:
+    pack = _pack()
+    events = sample_microbiology_culture(
+        _spine(240), pack, np.random.default_rng(8), patient_id="P7", hospitalization_id="H7"
+    )
+    assert events
+    assert all(e.patient_id == "P7" and e.hospitalization_id == "H7" for e in events)
 
 
 def test_cultures_are_sparse() -> None:
@@ -83,7 +121,7 @@ def test_cultures_are_sparse() -> None:
 def test_no_growth_is_the_dominant_result() -> None:
     pack = _pack()
     events = _cohort(pack, np.random.default_rng(4), 400)
-    no_growth = sum(e.organism_group == "no_growth" for e in events)
+    no_growth = sum(e.organism_group == mc.NO_GROWTH for e in events)
     assert no_growth / len(events) > 0.5  # realistic low yield
 
 
@@ -98,6 +136,7 @@ def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:
 
 def test_module_exports() -> None:
     assert set(mc.__all__) == {
+        "NO_GROWTH",
         "CultureEvent",
         "microbiology_culture_frame",
         "sample_microbiology_culture",

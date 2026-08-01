@@ -6,7 +6,7 @@ population** — not just the ICU. Where `../sample_dataset/` is an ICU cohort
 sees, with realistic patient flow. It lets you inspect and test code against a
 full-hospital shape without generating anything or holding any credential.
 
-- **~8,000 encounters**, ~29 MB, 20 parquet files (19 CLIF tables + a
+- **~8,000 encounters**, ~30 MB, 29 parquet files (all 28 canonical CLIF 2.1 tables + a
   synthetic-only `truth` benchmarking table).
 - A representative draw of the shared **full-hospital** dataset (same generator,
   same `full_hospital` mode).

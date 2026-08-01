@@ -17,7 +17,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
         "patient_id": base.numeric_id_column(),
         "hospitalization_id": base.numeric_id_column(),
-        "hospitalization_joined_id": base.numeric_id_column(),
+        "hospitalization_joined_id": base.numeric_id_column(required=False, nullable=True),
         "admission_dttm": base.utc_datetime(),
         "discharge_dttm": base.utc_datetime(),
         "age_at_admission": base.integer(),
@@ -32,6 +32,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "census_tract": base.string(),
         "state_code": base.string(),
         "county_code": base.string(),
+        "fips_version": base.string(),
     },
     strict=False,
     coerce=False,

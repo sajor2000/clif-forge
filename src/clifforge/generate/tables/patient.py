@@ -13,10 +13,15 @@ Faithful-omission notes (R15 — never invent un-fitted structure):
   de-identified and carries **no person-name columns**, so there is nothing for
   Faker to fill; the ``*_name`` fields are the source-string columns behind each
   category, and echoing the human-readable category is a faithful stand-in.
-* ``language_category``, ``birth_date``, and ``death_dttm`` are not fitted by the
-  U5 fit stage, so they are omitted rather than fabricated. The schema is
-  permissive (``required=False``), so their absence still validates; a survivor's
-  death is authoritatively carried on ``hospitalization`` (U8, AE4).
+* ``language_category`` and ``birth_date`` are not fitted by the U5 fit stage, so
+  they are omitted rather than fabricated. mCIDE *does* enumerate the language
+  values, but a permissible-value list is not a distribution: drawing uniformly
+  across it would put English at a few percent, which is worse than admitting the
+  field was never captured. The schema is permissive (``required=False``), so
+  their absence still validates.
+* ``death_dttm`` is emitted, but it is not sampled here — the orchestrator
+  propagates it from the encounter that ended in death (U8, AE4), so the patient
+  row cannot disagree with the hospitalization it came from.
 
 ``patient_id`` is assigned by the caller — the U21 orchestrator owns the id
 scheme and the one-to-many ``patient_id -> hospitalization_id`` linking (KTD-6,

@@ -3,15 +3,27 @@
 Cultures are **sparse** events (a handful per stay at most). No fitted block
 exists, so a documented per-ICU-day culture rate (un-fitted, like the adt
 constants) draws a small Poisson count per stay; each culture picks a fluid,
-method, and organism group from documented marginals — heavily weighted toward
+method, and organism from documented marginals — heavily weighted toward
 ``no_growth``, matching real ICU microbiology. Timestamps respect the clinical
 order ``order_dttm <= collect_dttm < result_dttm`` (result lands after a
-turnaround). The specific ``organism_category`` (543 organisms) has no fitted
-mapping, so only the coarse ``organism_group`` is populated; ``organism_category``
-is left null (R15; the schema is permissive).
+turnaround).
 
-The spine supplies only the stay horizon (KTD-6). Categories are exact mCIDE
-members (R5); output is reproducible byte-for-byte under a fixed ``rng`` (R22).
+Organisms are drawn as an ``(organism_category, organism_group)`` **pair**, not
+independently. The two mCIDE lists are separate files with no crosswalk between
+them (543 species, 108 groups), so sampling them separately would routinely emit
+a species filed under the wrong group — each value individually mCIDE-valid, the
+row clinically nonsense. The pairs below are a documented prior recorded in
+``PROVENANCE.md``; both members of every pair are exact mCIDE members (R5).
+
+``organism_id`` is the canonical join key to ``microbiology_susceptibility``: the
+DDL defines it as identifying "a unique, non-missing ``organism_category``" that
+links a culture to its sensitivities. A culture that grew nothing therefore gets a
+**null** ``organism_id`` and a null ``organism_category`` — there is no isolate to
+identify and nothing to test — which is exactly why the schema must not treat
+every ``*_id`` as non-nullable.
+
+The spine supplies only the stay horizon (KTD-6). Output is reproducible
+byte-for-byte under a fixed ``rng`` (R22).
 """
 
 from __future__ import annotations
@@ -28,6 +40,7 @@ from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 
 __all__ = [
+    "NO_GROWTH",
     "CultureEvent",
     "microbiology_culture_frame",
     "sample_microbiology_culture",
@@ -43,13 +56,28 @@ _FLUID_MARGINAL = {
     "skin_unspecified": 0.1,
 }
 _METHOD_MARGINAL = {"culture": 0.8, "gram_stain": 0.2}
-#: Organism groups, heavily weighted to no growth (realistic ICU yield).
-_ORGANISM_GROUP_MARGINAL = {
-    "no_growth": 0.65,
-    "staphylococcus_coag_pos": 0.1,
-    "escherichia": 0.1,
-    "klebsiella": 0.08,
-    "pseudomonas_wo_cepacia_maltophilia": 0.07,
+
+#: The mCIDE value meaning "nothing grew", in both the category and group lists.
+NO_GROWTH = "no_growth"
+
+#: ``organism_category -> organism_group``, for the isolates this generator emits.
+#: Every pair is a real species filed under its real mCIDE group.
+_ORGANISM_GROUP: dict[str, str] = {
+    "staphylococcus_aureus": "staphylococcus_coag_pos",
+    "escherichia_coli": "escherichia",
+    "klebsiella_pneumoniae": "klebsiella",
+    "pseudomonas_aeruginosa": "pseudomonas_wo_cepacia_maltophilia",
+    "enterococcus_faecalis": "enterococcus",
+}
+
+#: Heavily weighted to no growth, matching realistic ICU culture yield.
+_ORGANISM_MARGINAL = {
+    NO_GROWTH: 0.65,
+    "staphylococcus_aureus": 0.10,
+    "escherichia_coli": 0.10,
+    "klebsiella_pneumoniae": 0.08,
+    "pseudomonas_aeruginosa": 0.05,
+    "enterococcus_faecalis": 0.02,
 }
 
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
@@ -57,15 +85,26 @@ _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
 @dataclass(frozen=True)
 class CultureEvent:
-    """One microbiology culture (order/collect/result + categories)."""
+    """One microbiology culture (order/collect/result + categories).
 
+    ``organism_category`` and ``organism_id`` are ``None`` when nothing grew.
+    """
+
+    patient_id: str
     hospitalization_id: str
+    organism_id: str | None
     order_dttm: datetime
     collect_dttm: datetime
     result_dttm: datetime
     fluid_category: str
     method_category: str
+    organism_category: str | None
     organism_group: str
+
+    @property
+    def grew_organism(self) -> bool:
+        """True when the culture yielded an isolate, i.e. it can be sensitivity-tested."""
+        return self.organism_category is not None
 
 
 def sample_microbiology_culture(
@@ -73,30 +112,37 @@ def sample_microbiology_culture(
     pack: ParamPack,
     rng: np.random.Generator,
     *,
+    patient_id: str | None = None,
     hospitalization_id: str | None = None,
     admit_dttm: datetime = _DEFAULT_ADMIT,
 ) -> list[CultureEvent]:
     """Emit one hospitalization's sparse culture events (R5, R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
+    pid = patient_id if patient_id is not None else hid
     los_hours = spine.n_intervals * grid_step_hours(pack)
     if los_hours <= 0:
         return []
 
     n_cultures = int(rng.poisson(_CULTURES_PER_DAY * los_hours / 24.0))
     events: list[CultureEvent] = []
-    for _ in range(n_cultures):
+    for i in range(n_cultures):
         order = admit_dttm + timedelta(hours=float(rng.random()) * los_hours)
         collect = order + timedelta(minutes=float(rng.uniform(5.0, 60.0)))
         result = collect + timedelta(hours=float(rng.uniform(24.0, 72.0)))
+        organism = categorical(_ORGANISM_MARGINAL, rng)
+        grew = organism != NO_GROWTH
         events.append(
             CultureEvent(
+                patient_id=pid,
                 hospitalization_id=hid,
+                organism_id=f"{hid}-ORG{i}" if grew else None,
                 order_dttm=order,
                 collect_dttm=collect,
                 result_dttm=result,
                 fluid_category=categorical(_FLUID_MARGINAL, rng),
                 method_category=categorical(_METHOD_MARGINAL, rng),
-                organism_group=categorical(_ORGANISM_GROUP_MARGINAL, rng),
+                organism_category=organism if grew else None,
+                organism_group=_ORGANISM_GROUP[organism] if grew else NO_GROWTH,
             )
         )
     events.sort(key=lambda e: e.order_dttm)
@@ -107,7 +153,9 @@ def microbiology_culture_frame(events: list[CultureEvent]) -> pl.DataFrame:
     """Stack culture events into one conformant frame."""
     return pl.DataFrame(
         {
+            "patient_id": [e.patient_id for e in events],
             "hospitalization_id": [e.hospitalization_id for e in events],
+            "organism_id": [e.organism_id for e in events],
             "order_dttm": [e.order_dttm for e in events],
             "collect_dttm": [e.collect_dttm for e in events],
             "result_dttm": [e.result_dttm for e in events],
@@ -115,10 +163,14 @@ def microbiology_culture_frame(events: list[CultureEvent]) -> pl.DataFrame:
             "fluid_category": [e.fluid_category for e in events],
             "method_name": [e.method_category for e in events],
             "method_category": [e.method_category for e in events],
+            "organism_name": [e.organism_category for e in events],
+            "organism_category": [e.organism_category for e in events],
             "organism_group": [e.organism_group for e in events],
         },
         schema={
+            "patient_id": pl.String,
             "hospitalization_id": pl.String,
+            "organism_id": pl.String,
             "order_dttm": UTC_DATETIME,
             "collect_dttm": UTC_DATETIME,
             "result_dttm": UTC_DATETIME,
@@ -126,6 +178,8 @@ def microbiology_culture_frame(events: list[CultureEvent]) -> pl.DataFrame:
             "fluid_category": pl.String,
             "method_name": pl.String,
             "method_category": pl.String,
+            "organism_name": pl.String,
+            "organism_category": pl.String,
             "organism_group": pl.String,
         },
     )

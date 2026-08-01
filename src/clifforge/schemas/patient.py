@@ -22,7 +22,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "ethnicity_category": base.category("patient", "ethnicity_category"),
         "sex_name": base.string(),
         "sex_category": base.category("patient", "sex_category"),
-        "birth_date": base.utc_datetime(),
+        "birth_date": base.date(),
         "death_dttm": base.utc_datetime(),
         "language_name": base.string(),
         "language_category": base.category("patient", "language_category"),

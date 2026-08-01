@@ -31,6 +31,7 @@ from clifforge.generate._common import (
     grid_step_hours,
 )
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference import loader
 
 __all__ = [
     "AssessmentRow",
@@ -97,20 +98,38 @@ def sample_patient_assessments(
 
 
 def patient_assessments_frame(rows: list[AssessmentRow]) -> pl.DataFrame:
-    """Stack assessments into one conformant frame."""
+    """Stack assessments into one conformant frame.
+
+    ``assessment_group`` is read from the mCIDE file's own group column (RASS and
+    gcs_total both roll up to ``Sedation/Agitation`` and ``Neurological Status``
+    respectively), so the roll-up is the consortium's rather than one invented here.
+
+    ``categorical_value`` and ``text_value`` are null: both scores emitted by this
+    generator are numeric, and CLIF's own guidance is that an assessment populates
+    the value column matching its type. Copying the number into the text column
+    would make a numeric score look like free-text charting.
+    """
+    group = loader.crosswalk("patient_assessments", "assessment_category", "assessment_group")
+    n = len(rows)
     return pl.DataFrame(
         {
             "hospitalization_id": [r.hospitalization_id for r in rows],
             "recorded_dttm": [r.recorded_dttm for r in rows],
             "assessment_name": [r.assessment_category for r in rows],
             "assessment_category": [r.assessment_category for r in rows],
+            "assessment_group": [group[r.assessment_category] for r in rows],
             "numerical_value": [r.numerical_value for r in rows],
+            "categorical_value": [None] * n,
+            "text_value": [None] * n,
         },
         schema={
             "hospitalization_id": pl.String,
             "recorded_dttm": UTC_DATETIME,
             "assessment_name": pl.String,
             "assessment_category": pl.String,
+            "assessment_group": pl.String,
             "numerical_value": pl.Float64,
+            "categorical_value": pl.String,
+            "text_value": pl.String,
         },
     )

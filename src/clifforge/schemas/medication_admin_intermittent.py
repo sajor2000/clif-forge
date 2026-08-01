@@ -29,6 +29,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "mar_action_category": base.category(
             "medication_admin_intermittent", "mar_action_category"
         ),
+        "mar_action_group": base.string(),
     },
     strict=False,
     coerce=False,

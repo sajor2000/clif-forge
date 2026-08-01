@@ -4,7 +4,7 @@ Do not hand-edit the generated column list; regenerate with
 ``uv run python scripts/gen_schemas.py``. A table unit MAY append clinical-coupling
 refinements below SCHEMA via .update_column()/.add_columns() (see U3 / R15).
 
-Table: hospital_diagnosis (beta)
+Table: hospital_diagnosis (concept)
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ from clifforge.schemas import base
 
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
-        "patient_id": base.numeric_id_column(),
-        "diagnostic_code": base.plain_float(),
+        "hospitalization_id": base.numeric_id_column(),
+        "diagnosis_code": base.string(),
         "diagnosis_code_format": base.string(),
-        "start_dttm": base.utc_datetime(),
-        "end_dttm": base.utc_datetime(),
+        "diagnosis_primary": base.integer(),
+        "poa_present": base.integer(),
     },
     strict=False,
     coerce=False,

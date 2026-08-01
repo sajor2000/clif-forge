@@ -15,6 +15,10 @@ Three provenance classes:
   constants (R15).
 - **prior-driven** — no fit and no consortium prior file; content comes from
   documented literature / clinical-norm rates keyed to spine acuity (R14).
+- **derived** — not an independent event stream at all. CLIF defines the table as
+  hanging off another table's rows via a key that table minted
+  (``organism_id``, ``med_order_id``), so it is folded from those rows within the
+  same encounter and joins back to them exactly.
 
 | Table | Provenance | Basis |
 |-------|------------|-------|
@@ -38,6 +42,25 @@ Three provenance classes:
 | `key_icu_orders` | prior-driven | PT/OT rehab orders for a subset of ICU stays |
 | `therapy_details` | prior-driven | documented PT/OT session elements |
 | `provider` | prior-driven | one attending + one nurse spanning each stay |
+| `hospital_diagnosis` | spine-derived | ICD-10-CM codes from organ-failure flags; POA from flag onset |
+| `patient_diagnosis` | spine-derived | chronic problem list + encounter dx mirroring the same flags |
+| `intake_output` | spine-derived | hourly balance; oliguria on renal flag, resuscitation on cv flag |
+| `microbiology_nonculture` | prior-driven | documented per-stay molecular-panel rate; mCIDE targets |
+| `patient_procedures` | prior-driven | rare, ventilated-stay-only draw from the vendored CPT code list |
+| `place_based_index` | prior-driven | one latent deprivation draw on published ADI/SVI scales |
+| `clinical_trial` | prior-driven | documented enrolment rate for ventilated stays; synthetic trial registry |
+| `microbiology_susceptibility` | derived | panel per isolate grown by `microbiology_culture` (`organism_id`) |
+| `medication_orders` | derived | folded from both med-admin tables on `med_order_id` |
+
+Two notes on what the classes above do *not* claim:
+
+- A **derived** table inherits its parent's provenance for structure but still
+  uses documented priors for content — the susceptibility panels and per-organism
+  resistance rates (MRSA-level oxacillin resistance vs near-zero vancomycin
+  resistance) are literature norms, not fitted.
+- `invasive_hemodynamics` values are drawn per shock phenotype (cardiogenic vs
+  distributive), assigned once per stay. The phenotype split and both value ranges
+  are documented physiology, not fitted.
 
 **Release gate:** any public release of a generated dataset or the parameter pack
 requires credentialed-data and Rush compliance confirmation.

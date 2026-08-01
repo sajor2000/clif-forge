@@ -55,6 +55,17 @@ VITALS = ("heart_rate", "sbp", "dbp", "map", "respiratory_rate", "spo2", "temp_c
 _EMIT_PROB_ICU = 0.85
 _EMIT_PROB_WARD = 0.30
 
+#: Measurement site for the vitals where the site changes how the number reads.
+#: Free text: CLIF gives ``meas_site_name`` no mCIDE. Vitals absent from this map
+#: have no meaningful site and are emitted null.
+_MEAS_SITE: dict[str, str] = {
+    "temp_c": "core",
+    "sbp": "arterial line",
+    "dbp": "arterial line",
+    "map": "arterial line",
+    "spo2": "finger",
+}
+
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
 
@@ -149,7 +160,15 @@ def sample_vitals(
 
 
 def vitals_frame(observations: list[VitalObservation]) -> pl.DataFrame:
-    """Stack observed vitals into one conformant long ``vitals`` frame."""
+    """Stack observed vitals into one conformant long ``vitals`` frame.
+
+    ``meas_site_name`` is populated only where a site is meaningful. CLIF's own
+    mCIDE description of ``temp_c`` says the site "should be indicated in
+    meas_site_name", because an oral and a core temperature are not
+    interchangeable readings; blood pressure carries the same distinction between
+    an arterial line and a cuff. A heart rate has no comparable site, so it is
+    left null rather than filled with a placeholder.
+    """
     return pl.DataFrame(
         {
             "hospitalization_id": [o.hospitalization_id for o in observations],
@@ -157,6 +176,7 @@ def vitals_frame(observations: list[VitalObservation]) -> pl.DataFrame:
             "vital_name": [o.vital_name for o in observations],
             "vital_category": [o.vital_category for o in observations],
             "vital_value": [o.vital_value for o in observations],
+            "meas_site_name": [_MEAS_SITE.get(o.vital_category) for o in observations],
         },
         schema={
             "hospitalization_id": pl.String,
@@ -164,5 +184,6 @@ def vitals_frame(observations: list[VitalObservation]) -> pl.DataFrame:
             "vital_name": pl.String,
             "vital_category": pl.String,
             "vital_value": pl.Float64,
+            "meas_site_name": pl.String,
         },
     )

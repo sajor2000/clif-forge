@@ -39,6 +39,7 @@ from clifforge.generate._common import (
 )
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference import loader
 
 __all__ = [
     "MedAdminRow",
@@ -46,6 +47,7 @@ __all__ = [
     "sample_medication_admin_continuous",
 ]
 
+_TABLE = "medication_admin_continuous"
 _DOSE_UNIT = "mcg/kg/min"
 _ROUTE = "iv"
 #: (med_category, documented rate range) for the two spine-coupled infusions.
@@ -295,7 +297,15 @@ def sample_medication_admin_continuous(
 
 
 def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
-    """Stack med-admin events into one conformant frame."""
+    """Stack med-admin events into one conformant frame.
+
+    ``med_group`` and ``mar_action_group`` are roll-ups of the categories, read
+    from the same vendored mCIDE files that define the categories themselves
+    rather than restated here — the consortium already publishes both mappings,
+    so deriving them is exact and cannot drift out of sync with the category list.
+    """
+    med_group = loader.crosswalk(_TABLE, "med_category", "med_group")
+    action_group = loader.crosswalk(_TABLE, "mar_action_category", "mar_action_group")
     return pl.DataFrame(
         {
             "hospitalization_id": [r.hospitalization_id for r in rows],
@@ -303,12 +313,14 @@ def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
             "admin_dttm": [r.admin_dttm for r in rows],
             "med_name": [r.med_category for r in rows],
             "med_category": [r.med_category for r in rows],
+            "med_group": [med_group[r.med_category] for r in rows],
             "med_route_name": [r.med_route_category for r in rows],
             "med_route_category": [r.med_route_category for r in rows],
             "med_dose": [r.med_dose for r in rows],
             "med_dose_unit": [r.med_dose_unit for r in rows],
             "mar_action_name": [r.mar_action_category for r in rows],
             "mar_action_category": [r.mar_action_category for r in rows],
+            "mar_action_group": [action_group[r.mar_action_category] for r in rows],
         },
         schema={
             "hospitalization_id": pl.String,
@@ -316,11 +328,13 @@ def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
             "admin_dttm": UTC_DATETIME,
             "med_name": pl.String,
             "med_category": pl.String,
+            "med_group": pl.String,
             "med_route_name": pl.String,
             "med_route_category": pl.String,
             "med_dose": pl.Float64,
             "med_dose_unit": pl.String,
             "mar_action_name": pl.String,
             "mar_action_category": pl.String,
+            "mar_action_group": pl.String,
         },
     )

@@ -22,25 +22,56 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_committed_sample_reproduces_from_its_recipe() -> None:
-    # Rebuild the exact pack from the committed spec + base pack, then regenerate the
-    # first encounters with the recorded seed. SeedSequence(seed).spawn assigns each
-    # encounter a stable key, so H0..H29 must match the committed sample's first 30 —
-    # proving the whole dataset is reproducible from spec + base pack + seed.
-    spec = load_spec(_SAMPLE / "spec.toml")
+#: Encounters compared. ``SeedSequence(seed).spawn`` assigns each encounter a
+#: stable key regardless of how many are generated, so regenerating the first 30
+#: must reproduce the committed sample's first 30 exactly.
+_N = 30
+
+
+def _compare(sample_dir: Path) -> None:
+    """Assert every table of the committed sample reproduces from its recipe.
+
+    Checking *every* table matters: an earlier version of this test compared only
+    ``hospitalization``, so it kept passing while nine tables were added and five
+    others changed shape underneath it. A reproducibility test that only looks at
+    the one table nobody edits does not test reproducibility.
+    """
+    spec = load_spec(sample_dir / "spec.toml")
     pack = spec_to_pack(spec, ParamPack.load(str(_BASE)))
-    regen = (
-        generate_dataset(pack, n_patients=30, seed=42)
-        .tables["hospitalization"]
-        .sort("hospitalization_id")
-    )
-    ids = list(range(1, 31))  # 1-based int hospitalization ids
-    committed = (
-        pl.read_parquet(table_parquet_path(_SAMPLE, "hospitalization"))
-        .filter(pl.col("hospitalization_id").is_in(ids))
-        .sort("hospitalization_id")
-    )
-    assert regen.equals(committed)
+    regenerated = generate_dataset(pack, n_patients=_N, seed=42).tables
+
+    compared = 0
+    for table, regen in regenerated.items():
+        path = table_parquet_path(sample_dir, table)
+        assert path.exists(), f"{sample_dir}/{path.name} is missing — regenerate the sample"
+
+        # Slice the committed dataset down to the same encounters. The ids are read
+        # off the regenerated frame rather than assumed, because patient and
+        # hospitalization ids are numbered from different offsets. Tables keyed on
+        # neither id (microbiology_susceptibility joins on organism_id alone) are
+        # covered transitively by the parent whose ids they carry.
+        key = next((c for c in ("hospitalization_id", "patient_id") if c in regen.columns), None)
+        if key is None:
+            continue
+        ids = regen[key].unique().to_list()
+        if not ids:
+            continue  # table is empty at n=30; nothing to compare against
+        committed = pl.read_parquet(path).filter(pl.col(key).is_in(ids))
+
+        assert regen.columns == committed.columns, (
+            f"{table}: committed sample has columns {committed.columns}, "
+            f"generator now produces {regen.columns} — regenerate the sample"
+        )
+        order = regen.columns
+        assert regen.sort(order).equals(committed.sort(order)), (
+            f"{table} does not reproduce from its recipe — regenerate the sample"
+        )
+        compared += 1
+    assert compared > 20, f"only {compared} tables compared; expected the full canonical set"
+
+
+def test_committed_sample_reproduces_from_its_recipe() -> None:
+    _compare(_SAMPLE)
 
 
 @pytest.mark.skipif(
@@ -48,20 +79,5 @@ def test_committed_sample_reproduces_from_its_recipe() -> None:
     reason="requires the committed full-hospital sample",
 )
 def test_committed_full_hospital_sample_reproduces_from_its_recipe() -> None:
-    # Same reproducibility contract as the ICU sample, but through the
-    # ``mode = "full_hospital"`` spec path: regenerating the first 30 encounters from the committed
-    # base pack + spec + seed must match the committed full-hospital sample.
-    spec = load_spec(_FULL_SAMPLE / "spec.toml")
-    pack = spec_to_pack(spec, ParamPack.load(str(_BASE)))
-    regen = (
-        generate_dataset(pack, n_patients=30, seed=42)
-        .tables["hospitalization"]
-        .sort("hospitalization_id")
-    )
-    ids = list(range(1, 31))  # 1-based int hospitalization ids
-    committed = (
-        pl.read_parquet(_FULLtable_parquet_path(_SAMPLE, "hospitalization"))
-        .filter(pl.col("hospitalization_id").is_in(ids))
-        .sort("hospitalization_id")
-    )
-    assert regen.equals(committed)
+    """Same contract as the ICU sample, through the ``mode = "full_hospital"`` spec path."""
+    _compare(_FULL_SAMPLE)

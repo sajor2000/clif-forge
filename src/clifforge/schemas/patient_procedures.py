@@ -16,10 +16,11 @@ from clifforge.schemas import base
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
         "hospitalization_id": base.numeric_id_column(),
-        "procedure_name": base.string(),
-        "procedure_category": base.string(),
-        "diagnosis": base.string(),
-        "start_dttm": base.utc_datetime(),
+        "billing_provider_id": base.id_column(),
+        "performing_provider_id": base.id_column(),
+        "procedure_code": base.string(),
+        "procedure_code_format": base.string(),
+        "procedure_billed_dttm": base.utc_datetime(),
     },
     strict=False,
     coerce=False,

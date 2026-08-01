@@ -16,6 +16,7 @@ import polars as pl
 from clifforge.conformance import gate
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate.spine import SpineFrame
+from clifforge.generate.tables import invasive_hemodynamics as ih
 from clifforge.generate.tables.ecmo_mcs import ecmo_mcs_frame, sample_ecmo_mcs
 from clifforge.generate.tables.invasive_hemodynamics import (
     invasive_hemodynamics_frame,
@@ -95,6 +96,48 @@ def test_hemodynamics_categories_and_gate() -> None:
     ).pandera_passed
 
 
+def test_hemodynamics_records_what_was_measured() -> None:
+    """Each row must carry a value in its measure's physiologic range.
+
+    A hemodynamics table that logs that a CVP was taken but not what it read is
+    not usable for anything, which is what this table used to emit.
+    """
+    pack = _pack()
+    rows = sample_invasive_hemodynamics(_spine([4] * 60, cv=True), pack, np.random.default_rng(1))
+    assert rows
+    for row in rows:
+        spans = [ih._RANGES[p][row.measure_category] for p in ih._RANGES]
+        assert min(lo for lo, _ in spans) <= row.measure_value <= max(hi for _, hi in spans)
+
+
+def test_shock_phenotype_is_consistent_within_a_stay() -> None:
+    """Filling pressure and cardiac output must move in opposite directions.
+
+    Cardiogenic shock backs pressure up behind a failing pump; distributive shock
+    runs empty and fast. Drawing them independently would erase both phenotypes
+    and leave a cohort of uniformly mid-range numbers.
+    """
+    pack = _pack()
+    high_cvp_with_low_output = 0
+    low_cvp_with_high_output = 0
+    for seed in range(80):
+        rows = sample_invasive_hemodynamics(
+            _spine([4] * 200, cv=True), pack, np.random.default_rng(seed)
+        )
+        cvp = [r.measure_value for r in rows if r.measure_category == "cvp"]
+        co = [
+            r.measure_value for r in rows if r.measure_category == "cardiac_output_thermodilution"
+        ]
+        if not cvp or not co:
+            continue
+        mean_cvp, mean_co = sum(cvp) / len(cvp), sum(co) / len(co)
+        # The two phenotypes are disjoint on this pair; a stay must sit in one.
+        assert not (mean_cvp > 10 and mean_co > 5), "a failing pump cannot also run fast"
+        high_cvp_with_low_output += mean_cvp > 10 and mean_co < 5
+        low_cvp_with_high_output += mean_cvp < 10 and mean_co > 5
+    assert high_cvp_with_low_output and low_cvp_with_high_output
+
+
 # --- transfusion ------------------------------------------------------------- #
 def test_transfusion_scales_with_peak_acuity() -> None:
     pack = _pack()
@@ -153,7 +196,12 @@ def test_no_icu_no_orders() -> None:
 
 
 # --- therapy_details --------------------------------------------------------- #
-def test_therapy_details_gate_and_string_timestamp() -> None:
+def test_therapy_details_gate_and_tz_aware_timestamp() -> None:
+    """``session_start_dttm`` is a real UTC timestamp, not an ISO string.
+
+    It used to be a string only because the website's untyped prose dictionary
+    defaulted it to one; the canonical DDL types it DATETIME.
+    """
     pack = _pack()
     rng = np.random.default_rng(0)
     rows: list = []
@@ -161,10 +209,12 @@ def test_therapy_details_gate_and_string_timestamp() -> None:
         rows = sample_therapy_details(_spine([2] * 96, hid=f"H{i}"), pack, rng)
         if rows:
             break
-    assert rows and all(isinstance(r.session_start_dttm, str) for r in rows)
-    assert gate.validate(
-        therapy_details_frame(rows), "therapy_details", run_secondary=False
-    ).pandera_passed
+    assert rows
+    assert all(r.session_start_dttm.tzinfo is not None for r in rows)
+    frame = therapy_details_frame(rows)
+    dtype = frame.schema["session_start_dttm"]
+    assert isinstance(dtype, pl.Datetime) and dtype.time_zone == "UTC"
+    assert gate.validate(frame, "therapy_details", run_secondary=False).pandera_passed
 
 
 # --- provider ---------------------------------------------------------------- #

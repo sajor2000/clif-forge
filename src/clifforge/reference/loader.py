@@ -98,31 +98,43 @@ def dictionary_tables() -> list[str]:
     return sorted(_dictionary()["tables"].keys())
 
 
-def table_columns(table: str) -> list[dict[str, str]]:
-    """Return the dictionary column list for ``table`` as ``[{name, dtype}, ...]``.
-
-    ``dtype`` is the CLIF data-dictionary type (VARCHAR / DATETIME / DOUBLE /
-    INT / ...), or ``UNKNOWN`` for Concept-tier columns the dictionary documents
-    without a data type. Raises if the table is not in the dictionary.
-    """
+def _table_entry(table: str) -> dict[str, Any]:
     tables_map = _dictionary()["tables"]
     if table not in tables_map:
         raise ReferenceDataError(
             f"No dictionary entry for table {table!r}. "
             f"Known tables: {', '.join(sorted(tables_map))}"
         )
-    return [dict(c) for c in tables_map[table]["columns"]]
+    entry: dict[str, Any] = tables_map[table]
+    return entry
 
 
-def table_maturity(table: str) -> str:
-    """Return ``'beta'`` or ``'concept'`` for a dictionary table."""
-    tables_map = _dictionary()["tables"]
-    if table not in tables_map:
-        raise ReferenceDataError(f"No dictionary entry for table {table!r}.")
-    maturity = tables_map[table].get("maturity")
-    if maturity is None:
-        raise ReferenceDataError(f"Table {table!r} has no recorded maturity tier.")
-    return str(maturity)
+def table_columns(table: str) -> list[dict[str, str]]:
+    """Return the column list for ``table`` as ``[{name, dtype, permissible}, ...]``.
+
+    ``dtype`` is the canonical DDL type (VARCHAR / DATETIME / DATE / DOUBLE /
+    FLOAT / INT / BOOLEAN); ``permissible`` is the canonical permissible-values
+    text, which may be empty. Raises if the table is not in the dictionary.
+    """
+    return [dict(c) for c in _table_entry(table)["columns"]]
+
+
+def table_maturity(table: str) -> str | None:
+    """Return ``'beta'`` / ``'concept'``, or ``None`` for an untiered table.
+
+    Maturity comes from the CLIF website's per-table badge — the only per-table
+    tiering that exists. Tables the canonical DDL defines but the website never
+    documented (``clinical_trial``, ``patient_diagnosis``, ``place_based_index``)
+    are genuinely untiered, so this returns ``None`` rather than inventing a tier.
+    """
+    maturity = _table_entry(table).get("maturity")
+    return str(maturity) if maturity is not None else None
+
+
+def foreign_keys(table: str) -> list[dict[str, str]]:
+    """Canonical ``FOREIGN KEY`` constraints for ``table`` as ``[{column, references}]``."""
+    keys: list[dict[str, str]] = _table_entry(table).get("foreign_keys", [])
+    return [dict(k) for k in keys]
 
 
 def dictionary_provenance() -> dict[str, str]:
@@ -165,6 +177,82 @@ def categories(table: str, field: str) -> list[str]:
             f"Known fields: {', '.join(sorted(fields))}"
         )
     return list(_read_first_column(fields[field]))
+
+
+@cache
+def _read_crosswalk(rel_path: str, to_column: str) -> dict[str, str]:
+    path = _DATA_ROOT / rel_path
+    if not path.exists():
+        raise ReferenceDataError(f"Vendored reference file missing: {path}")
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        fieldnames = reader.fieldnames
+        if not fieldnames:
+            raise ReferenceDataError(f"mCIDE file has no header: {path}")
+        if to_column not in fieldnames:
+            raise ReferenceDataError(
+                f"mCIDE file {rel_path} has no column {to_column!r} "
+                f"(columns: {', '.join(fieldnames)})"
+            )
+        key_col = fieldnames[0]
+        mapping = {
+            (row.get(key_col) or "").strip(): (row.get(to_column) or "").strip()
+            for row in reader
+            if (row.get(key_col) or "").strip()
+        }
+    return mapping
+
+
+def crosswalk(table: str, field: str, to_column: str) -> dict[str, str]:
+    """Map each permissible value of ``table.field`` to a companion column's value.
+
+    Several mCIDE files define more than a flat value list: they carry the
+    consortium's own roll-up alongside it, e.g.
+    ``clif_medication_admin_continuous_med_categories.csv`` maps every
+    ``med_category`` to its ``med_group``, and the action-category file maps every
+    ``mar_action_category`` to ``administered`` / ``not_administered``. Reading
+    those pairings straight out of the vendored file is what keeps a generated
+    ``*_group`` column canonically correct instead of hand-maintained here.
+
+    Raises if the file, field, or companion column is absent (R4).
+    """
+    mcide = _manifest()["mcide"]
+    if table not in mcide or field not in mcide[table]:
+        raise ReferenceDataError(f"No mCIDE field {field!r} for table {table!r}.")
+    return dict(_read_crosswalk(mcide[table][field], to_column))
+
+
+@cache
+def _read_rows(rel_path: str) -> tuple[dict[str, str], ...]:
+    path = _DATA_ROOT / rel_path
+    if not path.exists():
+        raise ReferenceDataError(f"Vendored reference file missing: {path}")
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        # Upstream headers carry stray whitespace (``procedure_code_format `` has a
+        # trailing space), so keys and values are both stripped on read.
+        rows = tuple(
+            {(k or "").strip(): (v or "").strip() for k, v in row.items()}
+            for row in csv.DictReader(fh)
+        )
+    return rows
+
+
+def code_list(table: str) -> list[dict[str, str]]:
+    """Return a vendored clinical *code table* for ``table`` as a list of row dicts.
+
+    Distinct from :func:`categories`: a code list enumerates real billing/clinical
+    codes (``patient_procedures`` ships CPT codes with their procedure names),
+    where every row is a code rather than a permissible value for one column.
+    Reading it here is what lets the generator emit genuine consortium-published
+    codes instead of plausible-looking invented ones.
+    """
+    code_lists = _manifest().get("code_lists", {})
+    if table not in code_lists:
+        raise ReferenceDataError(
+            f"No vendored code list for table {table!r}. "
+            f"Known tables: {', '.join(sorted(code_lists)) or '(none)'}"
+        )
+    return [dict(row) for row in _read_rows(code_lists[table])]
 
 
 def bounds(table: str, field: str) -> tuple[float, float]:

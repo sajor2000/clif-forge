@@ -1,7 +1,7 @@
 """Tests for the CLI + U21 orchestrator (R22, R23, R25, AE6).
 
 The scaffold parser tests (U1) plus the end-to-end pipeline: a fully
-self-contained synthetic parameter pack (no real data) drives spine -> 19 tables
+self-contained synthetic parameter pack (no real data) drives spine -> all 28 tables
 -> gate -> parquet, so CI exercises seeded determinism / byte-identical output
 (AE6), CLIF ``--out`` naming (R23), nonzero exit on any validation failure (R25),
 and the ``fit`` subcommand wiring.
@@ -19,7 +19,6 @@ from clifforge.cli import build_parser, main
 from clifforge.conformance.gate import ConformanceError
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate.filenames import parse_table_from_stem, table_parquet_filename
-from clifforge.reference import loader
 from clifforge.generate.orchestrator import (
     TRUTH_FILENAME,
     GeneratedDataset,
@@ -27,6 +26,7 @@ from clifforge.generate.orchestrator import (
     generate_streaming,
     write_dataset,
 )
+from clifforge.reference import loader
 
 
 # --- U1 scaffold parser tests ------------------------------------------------ #
@@ -140,11 +140,15 @@ def test_rng_fixture_is_seed_reproducible(rng: np.random.Generator, seed: int) -
 
 
 # --- orchestrator ------------------------------------------------------------ #
-def test_generate_dataset_produces_all_tables(pack: ParamPack) -> None:
+def test_generate_dataset_produces_every_canonical_table(pack: ParamPack) -> None:
+    """Every table the canonical CLIF 2.1 DDL defines must be emitted — no more, no less.
+
+    Asserted against the vendored dictionary rather than a literal count, so
+    adding a table upstream fails here instead of silently going unemitted.
+    """
     ds = generate_dataset(pack, n_patients=12, seed=1)
     assert isinstance(ds, GeneratedDataset)
-    assert len(ds.tables) == 19
-    assert "patient" in ds.tables and "provider" in ds.tables
+    assert set(ds.tables) == set(loader.dictionary_tables())
     assert ds.truth.height > 0
 
 
@@ -304,7 +308,7 @@ def test_write_dataset_can_skip_truth(pack: ParamPack, tmp_path) -> None:
     ds = generate_dataset(pack, n_patients=4, seed=1)
     written = write_dataset(ds, tmp_path, write_truth=False)
     assert not (tmp_path / "_truth.parquet").exists()
-    assert len(written) == 19
+    assert len(written) == len(loader.dictionary_tables())
     assert all(p.suffix == ".parquet" for p in written)
 
 
@@ -334,22 +338,22 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
     assert table_parquet_filename("vitals") in written and table_parquet_filename("provider") in written
 
 
-
-
 def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path) -> None:
-    """Nothing outside the CLIF dictionary may claim a ``clif_`` filename.
+    """Nothing outside the CLIF 2.1.0 dictionary may claim a ``clif_`` filename.
 
-    Filenames are ``clif_<table>_2.1_<maturity>.parquet``; the latent spine is
-    ``_truth.parquet``.
+    The latent spine is the standing temptation here — it is generator internals,
+    not a CLIF table, so it ships as ``_truth.parquet``.
     """
     write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path)
     emitted = {parse_table_from_stem(p.stem) for p in tmp_path.glob("clif_*.parquet")}
     assert None not in emitted
     assert emitted <= set(loader.dictionary_tables())
+    # Beta and concept tables both appear, under their maturity-tagged stems.
     stems = {p.stem for p in tmp_path.glob("clif_*.parquet")}
     assert table_parquet_filename("vitals").removesuffix(".parquet") in stems
     assert table_parquet_filename("provider").removesuffix(".parquet") in stems
     assert (tmp_path / TRUTH_FILENAME).exists()
+
 
 def test_cli_ae6_two_runs_byte_identical(pack: ParamPack, tmp_path) -> None:
     pack_dir = tmp_path / "pack"
@@ -375,7 +379,11 @@ def _null_id_wrapper(frame_fn, id_col):
     ("table", "id_col"),
     [
         ("patient", "patient_id"),  # assembled directly by the orchestrator
-        ("provider", "provider_id"),  # assembled via the table registry (last entry)
+        # Nulled on a late registry table so a dropped gate call downstream can't
+        # hide behind patient's own failure. It must be a *backbone* key: canonical
+        # 2.1 leaves provider_id, device_id, med_order_id and friends nullable, so
+        # nulling one of those is valid CLIF and correctly does not trip the gate.
+        ("provider", "hospitalization_id"),
     ],
 )
 def test_cli_generate_nonzero_on_conformance_failure(
