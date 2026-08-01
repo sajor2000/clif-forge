@@ -25,6 +25,13 @@ transition.
 respiratory-failure flag escalates the device to IMV, so severe respiratory
 failure raises IMV prevalence. The spine is the only cross-table channel.
 
+``device_name`` / ``mode_name`` take the first token from the vendored mCIDE
+``*_name_examples`` column (else echo the category). On IMV rows, observed vent
+readings (``*_obs``) are a small jitter around the paired set values (or a
+documented in-bounds prior when R10 leaves the paired set null), clamped to
+consortium outlier bounds. Off-matrix ``*_set`` fields and ``vent_brand_name``
+remain deliberate omissions.
+
 Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
 """
 
@@ -32,6 +39,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 
 import numpy as np
 import polars as pl
@@ -39,6 +47,7 @@ import polars as pl
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import IMV_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference import bounds, loader
 
 __all__ = [
     "DEVICE_SET_FIELDS",
@@ -86,6 +95,17 @@ _SET_COLUMNS = (
     "pressure_support_set",
 )
 
+#: Observed vent columns emitted on IMV rows (null elsewhere).
+_OBS_COLUMNS = (
+    "tidal_volume_obs",
+    "resp_rate_obs",
+    "plateau_pressure_obs",
+    "peak_inspiratory_pressure_obs",
+    "peep_obs",
+    "minute_vent_obs",
+    "mean_airway_pressure_obs",
+)
+
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
 
@@ -100,6 +120,7 @@ class RespiratorySupportRow:
     mode_category: str | None
     tracheostomy: int
     set_values: dict[str, float]  # only the device's matrix fields, all in-bounds
+    obs_values: dict[str, float]  # IMV-only observed readings, empty otherwise
 
 
 def _device_for(level: int, resp_failure: bool, *, l2_noninvasive: bool = False) -> str:
@@ -156,6 +177,53 @@ def _set_values(device: str, rng: np.random.Generator) -> dict[str, float]:
         "pressure_support_set": round(float(rng.uniform(5.0, 15.0)), 0),
     }
     return {field: pool[field] for field in DEVICE_SET_FIELDS[device]}
+
+
+def _clamp_obs(field: str, value: float) -> float:
+    lo, hi = bounds("respiratory_support", field)
+    return min(max(value, lo), hi)
+
+
+def _obs_values(
+    device: str, set_vals: dict[str, float], rng: np.random.Generator
+) -> dict[str, float]:
+    """IMV-only observed readings: jitter from paired sets + documented priors."""
+    if device != "IMV":
+        return {}
+    tv = set_vals["tidal_volume_set"]
+    rr = set_vals["resp_rate_set"]
+    tv_obs = _clamp_obs("tidal_volume_obs", tv * float(rng.uniform(0.92, 1.08)))
+    rr_obs = _clamp_obs("resp_rate_obs", rr * float(rng.uniform(0.9, 1.1)))
+    peep = _clamp_obs("peep_obs", float(rng.uniform(5.0, 12.0)))
+    plateau = _clamp_obs("plateau_pressure_obs", peep + float(rng.uniform(8.0, 18.0)))
+    pip = _clamp_obs(
+        "peak_inspiratory_pressure_obs", plateau + float(rng.uniform(2.0, 8.0))
+    )
+    map_ = _clamp_obs(
+        "mean_airway_pressure_obs", (peep + plateau) / 2.0 * float(rng.uniform(0.9, 1.1))
+    )
+    minute = _clamp_obs("minute_vent_obs", (tv_obs * rr_obs) / 1000.0)
+    return {
+        "tidal_volume_obs": round(tv_obs, 0),
+        "resp_rate_obs": round(rr_obs, 0),
+        "plateau_pressure_obs": round(plateau, 1),
+        "peak_inspiratory_pressure_obs": round(pip, 1),
+        "peep_obs": round(peep, 0),
+        "minute_vent_obs": round(minute, 2),
+        "mean_airway_pressure_obs": round(map_, 1),
+    }
+
+
+@lru_cache(maxsize=1)
+def _device_names() -> dict[str, str]:
+    raw = loader.crosswalk("respiratory_support", "device_category", "device_name_examples")
+    return {k: (v.split(",")[0].strip() if v else k) for k, v in raw.items()}
+
+
+@lru_cache(maxsize=1)
+def _mode_names() -> dict[str, str]:
+    raw = loader.crosswalk("respiratory_support", "mode_category", "mode_name_examples")
+    return {k: (v.split(",")[0].strip() if v else k) for k, v in raw.items()}
 
 
 def sample_respiratory_support(
@@ -225,6 +293,7 @@ def sample_respiratory_support(
         if idx < len(timeline) and timeline[idx] == timeline[seg_start]:
             continue
         device, seg_trach = timeline[seg_start]
+        sets = _set_values(device, rng)
         rows.append(
             RespiratorySupportRow(
                 hospitalization_id=hid,
@@ -233,7 +302,8 @@ def sample_respiratory_support(
                 device_category=device,
                 mode_category=_DEVICE_MODE.get(device),
                 tracheostomy=seg_trach,
-                set_values=_set_values(device, rng),
+                set_values=sets,
+                obs_values=_obs_values(device, sets, rng),
             )
         )
         seg_start = idx
@@ -242,11 +312,15 @@ def sample_respiratory_support(
 
 def respiratory_support_frame(rows: list[RespiratorySupportRow]) -> pl.DataFrame:
     """Stack device segments into one conformant ``respiratory_support`` frame."""
+    device_names = _device_names()
+    mode_names = _mode_names()
     schema: dict[str, pl.DataType] = {
         "hospitalization_id": pl.String(),
         "device_id": pl.String(),
         "recorded_dttm": UTC_DATETIME,
+        "device_name": pl.String(),
         "device_category": pl.String(),
+        "mode_name": pl.String(),
         "mode_category": pl.String(),
         "tracheostomy": pl.Int64(),
     }
@@ -254,13 +328,22 @@ def respiratory_support_frame(rows: list[RespiratorySupportRow]) -> pl.DataFrame
     for col in _SET_COLUMNS:
         schema[col] = pl.Float64()
         data[col] = []
+    for col in _OBS_COLUMNS:
+        schema[col] = pl.Float64()
+        data[col] = []
     for r in rows:
         data["hospitalization_id"].append(r.hospitalization_id)
         data["device_id"].append(r.device_id)
         data["recorded_dttm"].append(r.recorded_dttm)
+        data["device_name"].append(device_names.get(r.device_category, r.device_category))
         data["device_category"].append(r.device_category)
+        data["mode_name"].append(
+            mode_names.get(r.mode_category, r.mode_category) if r.mode_category else None
+        )
         data["mode_category"].append(r.mode_category)
         data["tracheostomy"].append(r.tracheostomy)
         for col in _SET_COLUMNS:
             data[col].append(r.set_values.get(col))
+        for col in _OBS_COLUMNS:
+            data[col].append(r.obs_values.get(col))
     return pl.DataFrame(data, schema=schema)

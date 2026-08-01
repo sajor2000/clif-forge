@@ -7,21 +7,20 @@ clinical tables (vitals, respiratory support, …), whereas a patient is a stabl
 entity spanning one-or-more encounters — so this sampler takes only
 ``(pack, rng)``.
 
-Faithful-omission notes (R15 — never invent un-fitted structure):
+Faithful-omission / prior notes (R15):
 
 * ``*_name`` echoes the mCIDE ``*_category`` value. CLIF 2.1.0 ``patient`` is
   de-identified and carries **no person-name columns**, so there is nothing for
   Faker to fill; the ``*_name`` fields are the source-string columns behind each
   category, and echoing the human-readable category is a faithful stand-in.
-* ``language_category`` and ``birth_date`` are not fitted by the U5 fit stage, so
-  they are omitted rather than fabricated. mCIDE *does* enumerate the language
-  values, but a permissible-value list is not a distribution: drawing uniformly
-  across it would put English at a few percent, which is worse than admitting the
-  field was never captured. The schema is permissive (``required=False``), so
-  their absence still validates.
-* ``death_dttm`` is emitted, but it is not sampled here — the orchestrator
-  propagates it from the encounter that ended in death (U8, AE4), so the patient
-  row cannot disagree with the hospitalization it came from.
+* ``language_category`` is **not** fitted by U5. It is drawn from a documented
+  English-skewed US ICU prior (never uniform over the full mCIDE list — that
+  would put English at a few percent). ``language_name`` echoes the category.
+* ``birth_date`` is not sampled here — the orchestrator derives it from
+  ``admission_dttm − age_at_admission`` once the encounter age is known, so the
+  patient row cannot disagree with the hospitalization it came from.
+* ``death_dttm`` is likewise orchestrator-propagated from the encounter that
+  ended in death (U8, AE4).
 
 ``patient_id`` is assigned by the caller — the U21 orchestrator owns the id
 scheme and the one-to-many ``patient_id -> hospitalization_id`` linking (KTD-6,
@@ -41,8 +40,19 @@ from clifforge.generate.sampling import categorical
 
 __all__ = ["PatientRecord", "patient_frame", "sample_patient"]
 
-#: The columns emitted, in order — all string. Optional CLIF columns U5 does not
-#: fit (language/birth_date/death_dttm) are intentionally absent (schema permits).
+#: Documented US ICU language prior (not fitted). Keys are exact mCIDE members.
+_LANGUAGE_MARGINAL: dict[str, float] = {
+    "English": 0.82,
+    "Spanish": 0.09,
+    "Chinese": 0.02,
+    "Vietnamese": 0.01,
+    "Arabic": 0.01,
+    "Other and unspecified languages": 0.02,
+    "Unknown or NA": 0.03,
+}
+
+#: The columns emitted by :func:`patient_frame`. ``death_dttm`` / ``birth_date``
+#: are appended by the orchestrator.
 _COLUMNS: tuple[str, ...] = (
     "patient_id",
     "race_category",
@@ -51,6 +61,8 @@ _COLUMNS: tuple[str, ...] = (
     "ethnicity_name",
     "sex_category",
     "sex_name",
+    "language_category",
+    "language_name",
 )
 
 
@@ -65,6 +77,8 @@ class PatientRecord:
     ethnicity_name: str
     sex_category: str
     sex_name: str
+    language_category: str
+    language_name: str
 
 
 def _patient_params(pack: ParamPack) -> dict[str, dict[str, float]]:
@@ -80,15 +94,17 @@ def sample_patient(
 ) -> PatientRecord:
     """Sample one patient's demographics from the pack marginals (R5, R6, R22).
 
-    Draws race, then ethnicity, then sex from ``rng`` in that fixed order, so the
-    same seed reproduces the same record. Every ``*_category`` is an exact,
-    case-sensitive mCIDE member because it is drawn from the fitted marginal's own
-    (mCIDE-conformant) keys; ``*_name`` echoes the category.
+    Draws race, then ethnicity, then sex, then language from ``rng`` in that fixed
+    order, so the same seed reproduces the same record. Every ``*_category`` is an
+    exact, case-sensitive mCIDE member; ``*_name`` echoes the category.
     """
     params = _patient_params(pack)
     race = categorical(params["race_category_marginal"], rng)
     ethnicity = categorical(params["ethnicity_category_marginal"], rng)
     sex = categorical(params["sex_category_marginal"], rng)
+    language = categorical(
+        params.get("language_category_marginal", _LANGUAGE_MARGINAL), rng
+    )
     return PatientRecord(
         patient_id=patient_id,
         race_category=race,
@@ -97,6 +113,8 @@ def sample_patient(
         ethnicity_name=ethnicity,
         sex_category=sex,
         sex_name=sex,
+        language_category=language,
+        language_name=language,
     )
 
 
@@ -111,6 +129,8 @@ def patient_frame(records: list[PatientRecord]) -> pl.DataFrame:
             "ethnicity_name": [r.ethnicity_name for r in records],
             "sex_category": [r.sex_category for r in records],
             "sex_name": [r.sex_name for r in records],
+            "language_category": [r.language_category for r in records],
+            "language_name": [r.language_name for r in records],
         },
         schema={name: pl.String for name in _COLUMNS},
     )

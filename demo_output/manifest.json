@@ -1,0 +1,123 @@
+{
+  "generator_version": "0.1.0",
+  "spec": "master",
+  "seed": 42,
+  "tables": {
+    "_truth": {
+      "rows": 571,
+      "sha256": "87905902a82bfd59b5e369c1ec2ca5ca79dc1e1f42fa9964268d780b033dc439"
+    },
+    "clif_adt_2.1_beta": {
+      "rows": 127,
+      "sha256": "ae09347655e8c14dc4b66be161fd02ebe9512085164647a06b9a78d1b22f7883"
+    },
+    "clif_clinical_trial_2.1_untiered": {
+      "rows": 2,
+      "sha256": "a3a7f41d5631f371752e5e24eb0f0b19d88922d46205c298fafb078105a2abdb"
+    },
+    "clif_code_status_2.1_concept": {
+      "rows": 134,
+      "sha256": "88bb52b6556c4608a795f294953b5c46bd33b8543d921a5b7564e4f966efad5c"
+    },
+    "clif_crrt_therapy_2.1_concept": {
+      "rows": 91,
+      "sha256": "67e0090b9b8f27517d0f2fb8dfbd460d51ba8baac65c9af398c8479721ecd06f"
+    },
+    "clif_ecmo_mcs_2.1_concept": {
+      "rows": 63,
+      "sha256": "aca70dbe2cd4a449a5249c5b9b5b5604dbec71e5cd448649ec773452c00c6af8"
+    },
+    "clif_hospital_diagnosis_2.1_concept": {
+      "rows": 409,
+      "sha256": "ccf596d07ffabbdbc91539b0edb8a10e54155a30d676e89407ca0329feb520c1"
+    },
+    "clif_hospitalization_2.1_beta": {
+      "rows": 100,
+      "sha256": "182cb02bd8f301d44a11bf4d60d2acf9e1e46c13ba01f1bafece3812a1dc8beb"
+    },
+    "clif_intake_output_2.1_concept": {
+      "rows": 850,
+      "sha256": "1e418b2a485d6c9765265e90303ef3e73f6c8b5e1f8358a910a08a41c9f9b5f3"
+    },
+    "clif_invasive_hemodynamics_2.1_concept": {
+      "rows": 50,
+      "sha256": "91d05684216bf6d8da33d5ca4d4a014c91f811c1a17cf7f44b207def2c7549f9"
+    },
+    "clif_key_icu_orders_2.1_concept": {
+      "rows": 74,
+      "sha256": "5b45b87a6495ffa937780c661018347ce08cf7ff7cde90d31d0f11bf22eab1bd"
+    },
+    "clif_labs_2.1_beta": {
+      "rows": 168,
+      "sha256": "4ccd27fe656ec4573608a5d4eb7c55109bd1bba2fe528a693466c1c402f75b56"
+    },
+    "clif_medication_admin_continuous_2.1_beta": {
+      "rows": 372,
+      "sha256": "fbd7f271de55d808c848a75092f9520e3997129cb9eda84c60684cd35516e619"
+    },
+    "clif_medication_admin_intermittent_2.1_concept": {
+      "rows": 136,
+      "sha256": "2994b120c61044ef065e7d2836a39ddfe7496a2ac182a0c7f65aa46aa0739b43"
+    },
+    "clif_medication_orders_2.1_concept": {
+      "rows": 296,
+      "sha256": "4366ed76b21b1b9caf10631c051518084e63b3e934b9c39c72102595069129d0"
+    },
+    "clif_microbiology_culture_2.1_concept": {
+      "rows": 8,
+      "sha256": "fb9d9b06bb7f7fd8009d8e3de68c0a99e43748aade7c8767bb7eb719a49f1509"
+    },
+    "clif_microbiology_nonculture_2.1_concept": {
+      "rows": 60,
+      "sha256": "b22d84cdeb1bdfad69f9e06934e786c8beafa2ef9c6ff34820bab57049178d00"
+    },
+    "clif_microbiology_susceptibility_2.1_concept": {
+      "rows": 0,
+      "sha256": "76cb6ba1367936abd1929eda7e1585a2e77b9d523eb82637a77468cc750c4a78"
+    },
+    "clif_patient_2.1_beta": {
+      "rows": 100,
+      "sha256": "79c66cde83f460516306d2f47974376feeb456e0fc007a609399a937f6b80501"
+    },
+    "clif_patient_assessments_2.1_beta": {
+      "rows": 270,
+      "sha256": "ff7be056d74aab1237fe35519c6217e9b13839cb89f3e9874b97ec23fc6afa61"
+    },
+    "clif_patient_diagnosis_2.1_untiered": {
+      "rows": 304,
+      "sha256": "f4cb501053456e6269e38126d207117ade7c31d0a438d9cc7bcce1ae7271dc82"
+    },
+    "clif_patient_procedures_2.1_concept": {
+      "rows": 4,
+      "sha256": "4514417989c57b80138d25b17ab0227ed2600600f3fcb6d7e703191a810f91cf"
+    },
+    "clif_place_based_index_2.1_untiered": {
+      "rows": 200,
+      "sha256": "8d3fed86cec8dce28ca4ec5f7f14ebb915771c07bc932957c55825c36389052b"
+    },
+    "clif_position_2.1_beta": {
+      "rows": 108,
+      "sha256": "491d46c61b2820c045afbb483a2c6f3c21daa269f833a78a91ec133ec1a59d22"
+    },
+    "clif_provider_2.1_concept": {
+      "rows": 200,
+      "sha256": "15ed3fc043cb48a817577da220ac75e06d7a3426371ceb0843143788c1a3ad3b"
+    },
+    "clif_respiratory_support_2.1_beta": {
+      "rows": 171,
+      "sha256": "e5e210d604c9862bcb584d645b2b76a60c443152a61c914d2a521dd5f78c0f92"
+    },
+    "clif_therapy_details_2.1_concept": {
+      "rows": 90,
+      "sha256": "1efcb73fcb6dd268dbbc9e4d24d47467c595d975ed70bb9ebf8d039676c6e43e"
+    },
+    "clif_transfusion_2.1_concept": {
+      "rows": 70,
+      "sha256": "584302abffc5f5dfd5b1da5b481f13063988aa9a6e689557b2b8876ebd63968f"
+    },
+    "clif_vitals_2.1_beta": {
+      "rows": 2803,
+      "sha256": "56594204d69f229bbfc60ad89a7ec12aeefb3dfbd02dd55f0633daba315e849e"
+    }
+  }
+}

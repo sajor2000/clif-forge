@@ -22,14 +22,14 @@ Three provenance classes:
 
 | Table | Provenance | Basis |
 |-------|------------|-------|
-| `patient` | fitted | pack demographic marginals |
-| `hospitalization` | fitted | pack admission/discharge marginals + spine LOS/outcome (AE4) |
+| `patient` | fitted | pack demographic marginals; language from documented English-skew prior; birth_date from admission−age |
+| `hospitalization` | fitted | pack admission/discharge marginals + spine LOS/outcome (AE4); age from pack quantiles |
 | `vitals` | fitted | pack per-state AR(1) physiology |
-| `labs` | fitted | pack Gaussian-copula (correlation + log-normal marginals + presence) |
+| `labs` | fitted | pack Gaussian-copula (correlation + log-normal marginals + presence); mCIDE unit/order crosswalks; collect/result timing priors |
 | `medication_admin_continuous` | fitted | pack per-med infusion hazards + spine couplings |
 | *(latent spine)* | fitted | pack semi-Markov state model + per-level flag prevalences |
 | `adt` | spine-derived | acuity RLE into ward/ICU segments |
-| `respiratory_support` | spine-derived | support-ladder device sequence + R10 matrix, AE1/AE2 |
+| `respiratory_support` | spine-derived | support-ladder device sequence + R10 matrix, AE1/AE2; mCIDE name examples; IMV `*_obs` jitter |
 | `patient_assessments` | spine-derived | RASS↔sedation, GCS↔neuro-failure flag |
 | `position` | spine-derived | prone↔severe-hypoxemia (resp+IMV) |
 | `medication_admin_intermittent` | spine-derived | documented antibiotic schedule over the stay |

@@ -136,6 +136,43 @@ def test_categories_are_exact_mcide_members() -> None:
             assert r.mode_category in mode_ok
 
 
+def test_imv_emits_obs_within_bounds_and_others_do_not() -> None:
+    pack = _pack()
+    rows = sample_respiratory_support(
+        _spine([0, 1, 3, 3, 1], hid="Hobs"), pack, np.random.default_rng(0)
+    )
+    assert any(r.device_category == "IMV" and r.obs_values for r in rows)
+    for r in rows:
+        if r.device_category == "IMV":
+            assert set(r.obs_values) == {
+                "tidal_volume_obs",
+                "resp_rate_obs",
+                "plateau_pressure_obs",
+                "peak_inspiratory_pressure_obs",
+                "peep_obs",
+                "minute_vent_obs",
+                "mean_airway_pressure_obs",
+            }
+            for field, value in r.obs_values.items():
+                lo, hi = bounds("respiratory_support", field)
+                assert lo <= value <= hi
+        else:
+            assert r.obs_values == {}
+
+
+def test_frame_carries_device_and_mode_names() -> None:
+    pack = _pack()
+    rows = sample_respiratory_support(
+        _spine([0, 1, 2, 3], hid="Hn"), pack, np.random.default_rng(0)
+    )
+    frame = respiratory_support_frame(rows)
+    assert "device_name" in frame.columns and "mode_name" in frame.columns
+    assert frame["device_name"].null_count() == 0
+    imv = frame.filter(pl.col("device_category") == "IMV")
+    if imv.height:
+        assert imv["tidal_volume_obs"].null_count() == 0
+
+
 def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:
     pack = _pack()
     rows: list = []

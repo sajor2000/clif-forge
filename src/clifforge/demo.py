@@ -48,6 +48,21 @@ def demo_pack() -> ParamPack:
                 "params": {
                     "admission_type_category_marginal": {"ed": 0.8, "direct": 0.2},
                     "discharge_category_marginal": {"Home": 0.7, "Expired": 0.3},
+                    # Illustrative adult age deciles so demo/coverage emits
+                    # age_at_admission the same way fitted packs do.
+                    "age_at_admission_quantiles": [
+                        25.0,
+                        35.0,
+                        45.0,
+                        55.0,
+                        62.0,
+                        68.0,
+                        74.0,
+                        80.0,
+                        86.0,
+                        92.0,
+                        100.0,
+                    ],
                 }
             },
             "vitals": {

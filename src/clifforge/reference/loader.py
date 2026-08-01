@@ -53,12 +53,23 @@ def _dictionary() -> dict[str, Any]:
     return data
 
 
+def _is_category_value(value: str) -> bool:
+    """True when ``value`` is a real mCIDE token, not a blank or CSV footnote.
+
+    Upstream language (and occasionally other) CSVs append a prose footnote row
+    whose first cell starts with ``*`` — that is documentation, not a permissible
+    value, and must never enter ``Check.isin`` or a sampler.
+    """
+    return bool(value) and not value.startswith("*")
+
+
 @cache
 def _read_first_column(rel_path: str) -> tuple[str, ...]:
     """Return the first-column values (the category values) of a vendored CSV.
 
-    Skips the header row and blank lines. Values are returned verbatim (CLIF
-    mCIDE categories are case-sensitive and matched exactly downstream).
+    Skips the header row, blank lines, and ``*``-prefixed footnote rows. Values
+    are returned verbatim (CLIF mCIDE categories are case-sensitive and matched
+    exactly downstream).
     """
     path = _DATA_ROOT / rel_path
     if not path.exists():
@@ -71,7 +82,7 @@ def _read_first_column(rel_path: str) -> tuple[str, ...]:
             if not row:
                 continue
             value = row[0].strip()
-            if value:
+            if _is_category_value(value):
                 values.append(value)
     return tuple(values)
 
@@ -198,7 +209,7 @@ def _read_crosswalk(rel_path: str, to_column: str) -> dict[str, str]:
         mapping = {
             (row.get(key_col) or "").strip(): (row.get(to_column) or "").strip()
             for row in reader
-            if (row.get(key_col) or "").strip()
+            if _is_category_value((row.get(key_col) or "").strip())
         }
     return mapping
 

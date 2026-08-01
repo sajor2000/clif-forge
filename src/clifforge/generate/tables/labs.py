@@ -37,9 +37,13 @@ acuity-agnostic, so this is an explicit coupling, not a fitted mechanism), kept
 to classic renal markers rather than invented broadly (R15). The spine is the
 only cross-table channel (KTD-6); this generator never reads another table.
 
-Un-fitted columns (collect/result timestamps, order/specimen category, LOINC,
-reference unit) are omitted rather than fabricated (R15; the schema is
-permissive). Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
+``reference_unit`` and ``lab_order_category`` come from the vendored mCIDE
+crosswalk on ``lab_category`` (exact consortium pairings). Collect/result times
+follow the same order ≤ collect < result prior as microbiology cultures, with
+shorter chem-panel turnaround. Specimen type and LOINC remain deliberate
+omissions (no consortium specimen list; invented LOINC would silently misresolve).
+
+Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
 """
 
 from __future__ import annotations
@@ -57,7 +61,7 @@ from clifforge.fit.estimators import LAB_QUANTILE_PROBS
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
 from clifforge.generate.spine import SpineFrame
-from clifforge.reference import bounds
+from clifforge.reference import bounds, loader
 
 __all__ = ["LabObservation", "labs_frame", "sample_labs"]
 
@@ -76,6 +80,11 @@ _RENAL_LOG_SHIFT = 0.5
 #: failure. This is the ``expm1(log1p(v) + shift)`` coupling approximated as ``v * e^shift``.
 _RENAL_VALUE_FACTOR = float(np.exp(_RENAL_LOG_SHIFT))
 
+#: Collect delay after order (minutes) and result delay after collect (hours) —
+#: documented chem-panel priors, shorter than culture turnaround.
+_COLLECT_DELAY_MINUTES = (5.0, 60.0)
+_RESULT_DELAY_HOURS = (0.5, 6.0)
+
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
 
@@ -85,6 +94,8 @@ class LabObservation:
 
     hospitalization_id: str
     lab_order_dttm: datetime
+    lab_collect_dttm: datetime
+    lab_result_dttm: datetime
     lab_name: str
     lab_category: str
     lab_value: str
@@ -206,6 +217,10 @@ def sample_labs(
         z = chol @ rng.standard_normal(n)  # (2) correlated latent draw per panel
         jitter = rng.random() * grid_step
         order_dttm = admit_dttm + timedelta(hours=interval_idx * grid_step + jitter)
+        collect_dttm = order_dttm + timedelta(
+            minutes=float(rng.uniform(*_COLLECT_DELAY_MINUTES))
+        )
+        result_dttm = collect_dttm + timedelta(hours=float(rng.uniform(*_RESULT_DELAY_HOURS)))
         renal = spine.renal_flag[interval_idx]
         for i, lab in enumerate(order):
             if not present_mask[i]:
@@ -236,6 +251,8 @@ def sample_labs(
                 LabObservation(
                     hospitalization_id=hid,
                     lab_order_dttm=order_dttm,
+                    lab_collect_dttm=collect_dttm,
+                    lab_result_dttm=result_dttm,
                     lab_name=lab,
                     lab_category=lab,
                     lab_value=f"{value:g}",
@@ -248,22 +265,44 @@ def sample_labs(
 
 
 def labs_frame(observations: list[LabObservation]) -> pl.DataFrame:
-    """Stack observed labs into one conformant long ``labs`` frame."""
+    """Stack observed labs into one conformant long ``labs`` frame.
+
+    ``reference_unit`` / ``lab_order_category`` / ``lab_order_name`` are filled from
+    the vendored mCIDE companion columns so every emitted category pairing is an
+    exact consortium member (R5).
+    """
+    unit_by_lab = loader.crosswalk("labs", "lab_category", "reference_unit")
+    order_cat_by_lab = loader.crosswalk("labs", "lab_category", "lab_order_category")
+    order_name_by_cat = loader.crosswalk("labs", "lab_order_category", "description")
+
+    order_categories = [order_cat_by_lab[o.lab_category] for o in observations]
     return pl.DataFrame(
         {
             "hospitalization_id": [o.hospitalization_id for o in observations],
             "lab_order_dttm": [o.lab_order_dttm for o in observations],
+            "lab_collect_dttm": [o.lab_collect_dttm for o in observations],
+            "lab_result_dttm": [o.lab_result_dttm for o in observations],
+            "lab_order_name": [
+                order_name_by_cat.get(cat, cat) or cat for cat in order_categories
+            ],
+            "lab_order_category": order_categories,
             "lab_name": [o.lab_name for o in observations],
             "lab_category": [o.lab_category for o in observations],
             "lab_value": [o.lab_value for o in observations],
             "lab_value_numeric": [o.lab_value_numeric for o in observations],
+            "reference_unit": [unit_by_lab[o.lab_category] for o in observations],
         },
         schema={
             "hospitalization_id": pl.String,
             "lab_order_dttm": UTC_DATETIME,
+            "lab_collect_dttm": UTC_DATETIME,
+            "lab_result_dttm": UTC_DATETIME,
+            "lab_order_name": pl.String,
+            "lab_order_category": pl.String,
             "lab_name": pl.String,
             "lab_category": pl.String,
             "lab_value": pl.String,
             "lab_value_numeric": pl.Float64,
+            "reference_unit": pl.String,
         },
     )

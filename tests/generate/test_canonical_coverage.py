@@ -35,7 +35,6 @@ KNOWN_GAPS: dict[str, dict[str, str]] = {
         "dialysis_machine_name": "device make/model free text; no vendored source to draw from",
     },
     "hospitalization": {
-        "age_at_admission": "no fitted age distribution in the param pack (R15)",
         # Geography is deliberately absent rather than merely unmodelled. Synthetic
         # codes would be either meaningless or, if drawn from real ones, a
         # re-identification surface on a dataset whose whole point is carrying none.
@@ -50,40 +49,23 @@ KNOWN_GAPS: dict[str, dict[str, str]] = {
         "fips_version": "deliberate: no synthetic geography (see place_based_index)",
     },
     "labs": {
-        "lab_collect_dttm": "gap: lab order->collect->result timing is not modelled yet",
-        "lab_result_dttm": "gap: lab order->collect->result timing is not modelled yet",
-        "lab_order_name": "gap: order panels (vs individual analytes) are not modelled yet",
-        "lab_order_category": "gap: order panels (vs individual analytes) are not modelled yet",
-        "reference_unit": "gap: per-analyte units are not modelled yet",
-        "lab_specimen_name": "gap: specimen type is not modelled yet",
-        "lab_specimen_category": "gap: specimen type is not modelled yet",
         # A wrong LOINC code is worse than an absent one: it resolves, silently,
         # to a different analyte than the row actually reports.
         "lab_loinc_code": "no vendored LOINC crosswalk; an invented code would resolve wrongly",
+        "lab_specimen_name": "no consortium specimen vocabulary; not inventing one",
+        "lab_specimen_category": "no consortium specimen vocabulary; not inventing one",
     },
     "microbiology_culture": {
         "lab_loinc_code": "no vendored LOINC crosswalk; an invented code would resolve wrongly",
     },
-    "patient": {
-        "birth_date": "no fitted age distribution in the param pack (R15)",
-        "language_category": "mCIDE lists the values but the pack fits no distribution (R15)",
-        "language_name": "mCIDE lists the values but the pack fits no distribution (R15)",
-    },
     "respiratory_support": {
-        "device_name": "gap: source-string columns for device/mode are not modelled yet",
-        "vent_brand_name": "gap: ventilator make/model is not modelled yet",
-        "mode_name": "gap: source-string columns for device/mode are not modelled yet",
-        "pressure_control_set": "gap: only the core vent settings are modelled",
-        "flow_rate_set": "gap: only the core vent settings are modelled",
-        "peak_inspiratory_pressure_set": "gap: only the core vent settings are modelled",
-        "inspiratory_time_set": "gap: only the core vent settings are modelled",
-        "tidal_volume_obs": "gap: observed (vs set) ventilator readings are not modelled",
-        "resp_rate_obs": "gap: observed (vs set) ventilator readings are not modelled",
-        "plateau_pressure_obs": "gap: observed (vs set) ventilator readings are not modelled",
-        "peak_inspiratory_pressure_obs": "gap: observed ventilator readings are not modelled",
-        "peep_obs": "gap: observed (vs set) ventilator readings are not modelled",
-        "minute_vent_obs": "gap: observed (vs set) ventilator readings are not modelled",
-        "mean_airway_pressure_obs": "gap: observed (vs set) ventilator readings are not modelled",
+        "vent_brand_name": "ventilator make/model free text; no consortium catalog",
+        # Off-matrix set fields stay null until R10 DEVICE_SET_FIELDS expands to
+        # modes that use them (e.g. Pressure Control → pressure_control_set).
+        "pressure_control_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
+        "flow_rate_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
+        "peak_inspiratory_pressure_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
+        "inspiratory_time_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
     },
 }
 

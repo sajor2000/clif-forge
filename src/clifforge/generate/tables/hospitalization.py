@@ -18,9 +18,9 @@ is ``discharge_category == "Expired"``. So:
 
 ``patient_id`` / ``hospitalization_id`` are caller-assigned (the orchestrator owns
 the id scheme and one-to-many linking, R8); the sampled content is reproducible
-byte-for-byte under a fixed ``rng`` (R22). Optional CLIF columns U5 does not fit
-(``age_at_admission``, geographic zip/census codes) are omitted, not fabricated
-(R15; schema is permissive).
+byte-for-byte under a fixed ``rng`` (R22). ``age_at_admission`` is drawn from the
+pack's quantile grid when present. Geographic zip/census codes are omitted, not
+fabricated (R15; schema is permissive) — ``place_based_index`` carries deprivation.
 """
 
 from __future__ import annotations

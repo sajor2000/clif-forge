@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -331,8 +331,19 @@ def _generate_frames(
                 admit_dttm=admit,
             )
 
+    # AE4: death lands on the patient row. birth_date is derived from the
+    # encounter's age_at_admission so the two tables cannot disagree (R15).
+    birth_dates: list[date | None] = []
+    for hosp in hospitalizations:
+        if hosp.age_at_admission is None:
+            birth_dates.append(None)
+        else:
+            birth_dates.append(
+                (hosp.admission_dttm - timedelta(days=int(hosp.age_at_admission) * 365)).date()
+            )
     patient_df = patient_frame(patients).with_columns(
-        pl.Series("death_dttm", patient_deaths, dtype=UTC_DATETIME)
+        pl.Series("death_dttm", patient_deaths, dtype=UTC_DATETIME),
+        pl.Series("birth_date", birth_dates, dtype=pl.Date),
     )
     tables: dict[str, pl.DataFrame] = {
         "patient": patient_df,
