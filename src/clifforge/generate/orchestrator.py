@@ -38,6 +38,7 @@ import polars as pl
 from clifforge.conformance import gate
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, enforce_numeric_ids
+from clifforge.generate.filenames import table_parquet_filename, table_parquet_path
 from clifforge.generate.spine import sample_spine, truth_frame
 from clifforge.generate.tables.adt import adt_frame, sample_adt
 from clifforge.generate.tables.clinical_trial import clinical_trial_frame, sample_clinical_trial
@@ -107,7 +108,6 @@ from clifforge.generate.tables.respiratory_support import (
     sample_respiratory_support,
 )
 from clifforge.generate.tables.therapy_details import sample_therapy_details, therapy_details_frame
-from clifforge.generate.filenames import table_parquet_filename, table_parquet_path
 from clifforge.generate.tables.transfusion import sample_transfusion, transfusion_frame
 from clifforge.generate.tables.vitals import sample_vitals, vitals_frame
 

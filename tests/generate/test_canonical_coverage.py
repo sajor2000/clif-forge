@@ -62,10 +62,10 @@ KNOWN_GAPS: dict[str, dict[str, str]] = {
         "vent_brand_name": "ventilator make/model free text; no consortium catalog",
         # Off-matrix set fields stay null until R10 DEVICE_SET_FIELDS expands to
         # modes that use them (e.g. Pressure Control → pressure_control_set).
-        "pressure_control_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
-        "flow_rate_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
-        "peak_inspiratory_pressure_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
-        "inspiratory_time_set": "R10: not in DEVICE_SET_FIELDS for currently emitted modes",
+        "pressure_control_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
+        "flow_rate_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
+        "peak_inspiratory_pressure_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
+        "inspiratory_time_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
     },
 }
 

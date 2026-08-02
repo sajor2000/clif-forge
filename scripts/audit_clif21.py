@@ -13,25 +13,35 @@ list.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 from pathlib import Path
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
 from clifforge.demo import demo_pack
 from clifforge.generate.orchestrator import generate_dataset
 from clifforge.reference import categories, loader
 
-# Imported from the coverage test so the matrix and the pytest gate stay in sync.
-from tests.generate.test_canonical_coverage import KNOWN_GAPS
+
+def _known_gaps() -> dict[str, dict[str, str]]:
+    """Load ``KNOWN_GAPS`` from the coverage test so the matrix stays in sync.
+
+    The tests package is not an installable dependency of the script, so the
+    repo root is added to ``sys.path`` only for this import.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from tests.generate.test_canonical_coverage import KNOWN_GAPS
+
+    return KNOWN_GAPS
 
 
-def _status(table: str, column: str, emitted: set[str]) -> str:
+def _status(
+    table: str, column: str, emitted: set[str], known_gaps: dict[str, dict[str, str]]
+) -> str:
     if column in emitted:
         return "emitted"
-    if column in KNOWN_GAPS.get(table, {}):
+    if column in known_gaps.get(table, {}):
         return "deliberate"
     return "gap"
 
@@ -54,6 +64,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
+    known_gaps = _known_gaps()
     ds = generate_dataset(demo_pack(), n_patients=args.n_patients, seed=args.seed)
     lines = [
         "# CLIF 2.1.0 compliance matrix",
@@ -66,19 +77,13 @@ def main() -> int:
     for table in loader.dictionary_tables():
         frame = ds.tables[table]
         emitted = set(frame.columns)
-        mcide_fields = set()
-        try:
+        mcide_fields: set[str] = set()
+        with contextlib.suppress(loader.ReferenceDataError):
             mcide_fields = set(loader.mcide_fields(table))
-        except loader.ReferenceDataError:
-            pass
         for col in loader.table_columns(table):
             name = col["name"]
-            cov = _status(table, name, emitted)
-            mcide = (
-                _mcide_ok(table, name, emitted, frame)
-                if name in mcide_fields
-                else "—"
-            )
+            cov = _status(table, name, emitted, known_gaps)
+            mcide = _mcide_ok(table, name, emitted, frame) if name in mcide_fields else "—"
             lines.append(f"| `{table}` | `{name}` | {cov} | {mcide} |")
 
     text = "\n".join(lines) + "\n"

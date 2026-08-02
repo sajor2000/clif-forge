@@ -335,7 +335,8 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
     assert (out / table_parquet_filename("hospitalization")).exists()
     assert (out / "_truth.parquet").exists()
     written = {p.name for p in out.glob("clif_*.parquet")}
-    assert table_parquet_filename("vitals") in written and table_parquet_filename("provider") in written
+    assert table_parquet_filename("vitals") in written
+    assert table_parquet_filename("provider") in written
 
 
 def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path) -> None:
