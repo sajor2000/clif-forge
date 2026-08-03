@@ -12,6 +12,8 @@ The ordinal ``support_level`` spine ladder: 0 room-air, 1 low-flow O2,
 
 from __future__ import annotations
 
+from typing import Any
+
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
@@ -88,7 +90,7 @@ def grid_step_hours(pack: ParamPack) -> float:
     return float(block["params"].get("state_model", {}).get("grid_step_hours", 1.0))
 
 
-def pack_table_params(pack: ParamPack, table: str) -> dict:
+def pack_table_params(pack: ParamPack, table: str) -> dict[str, Any]:
     """Return ``pack.tables[table]['params']`` or ``{}`` when absent / unfitted.
 
     Rejects non-dict table blocks and non-dict ``params`` so a corrupt pack
