@@ -14,8 +14,8 @@ inlines its own CSS/JS and works opened directly in a browser.
 Point a static host at this folder (or copy it to the web root). Options:
 
 - **clif-icu.com** — the planned home; deploy this folder there when the domain is live.
-- **GitHub Pages** — set Pages to serve from `/site` (or move the folder to `/docs`),
-  then `index.html` is the site root.
+- **GitHub Pages** — workflow deploys `site/` on pushes to `main`
+  (https://sajor2000.github.io/clif-forge/).
 - **Local** — just open `index.html` in a browser.
 
 Both pages are light/dark theme-aware and responsive.
