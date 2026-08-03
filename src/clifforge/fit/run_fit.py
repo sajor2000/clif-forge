@@ -497,8 +497,10 @@ def _fit_source_prior_tables(
         params, rec = estimators.fit_categorical_marginals(
             mc, ("fluid_category", "method_category", "organism_category", "organism_group")
         )
-        adt_df = train_tables["adt"].collect() if "adt" in train_tables else None
-        rate, rrec = estimators.fit_cultures_per_icu_day(mc, adt_df)
+        adt_for_cultures: pl.DataFrame | None = (
+            train_tables["adt"].collect() if "adt" in train_tables else None
+        )
+        rate, rrec = estimators.fit_cultures_per_icu_day(mc, adt_for_cultures)
         params.update(rate)
         rec = [*rec, *rrec]
         prev, prec = estimators.fit_stay_prevalence(mc, n_hospitalizations)
@@ -537,17 +539,21 @@ def _fit_source_prior_tables(
         # Approximate from stay prevalence ÷ renal flag prevalence on the spine.
         if "stay_prevalence" in params and "spine" in table_blocks:
             spine_params = table_blocks["spine"].get("params", {})
-            flag_prev = spine_params.get("flag_prevalence_by_level", {})
-            renal_rates = []
+            flag_prev: object = (
+                spine_params.get("flag_prevalence_by_level", {})
+                if isinstance(spine_params, dict)
+                else {}
+            )
+            renal_rates: list[float] = []
             if isinstance(flag_prev, dict):
                 for cell in flag_prev.values():
                     if isinstance(cell, dict) and "renal_flag" in cell:
                         renal_rates.append(float(cell["renal_flag"]))
             renal_mean = sum(renal_rates) / len(renal_rates) if renal_rates else 0.0
             if renal_mean > 0:
-                params["crrt_prob"] = round(
-                    min(1.0, float(params["stay_prevalence"]) / renal_mean), 6
-                )
+                stay_prev = params["stay_prevalence"]
+                assert isinstance(stay_prev, (int, float))
+                params["crrt_prob"] = round(min(1.0, float(stay_prev) / renal_mean), 6)
         rec = [*rec, *prec]
         _record_table(
             "crrt_therapy",
@@ -604,14 +610,14 @@ def _fit_source_prior_tables(
     if "position" in train_tables:
         pos = train_tables["position"].collect()
         params, rec = estimators.fit_categorical_marginals(pos, ("position_category",))
-        rs_df = (
+        rs_for_prone: pl.DataFrame | None = (
             train_tables["respiratory_support"]
             .select("hospitalization_id", "device_category")
             .collect()
             if "respiratory_support" in train_tables
             else None
         )
-        prone, prec = estimators.fit_prone_rates(pos, rs_df)
+        prone, prec = estimators.fit_prone_rates(pos, rs_for_prone)
         params.update(prone)
         rec = [*rec, *prec]
         _record_table(
@@ -660,8 +666,8 @@ def _fit_source_prior_tables(
         except Exception:
             vendored = set()
         if vendored:
-            filtered = pp.filter(pl.col("procedure_code").is_in(list(vendored)))
-            pp_fit = filtered if filtered.height >= 20 else pp
+            pp_filtered = pp.filter(pl.col("procedure_code").is_in(list(vendored)))
+            pp_fit = pp_filtered if pp_filtered.height >= 20 else pp
         else:
             pp_fit = pp
         params, rec = estimators.fit_top_k_category(pp_fit, "procedure_code", k=40)
