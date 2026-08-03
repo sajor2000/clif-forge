@@ -126,8 +126,8 @@ def _apply_clinical_lab_bumps(
     renal: bool,
     renal_frac: float,
     shock: bool,
-    inflammation: bool,
     log_space: bool,
+    inflammation: bool = False,
 ) -> float:
     """Apply R12 organ-failure bumps; renal ramps with consecutive flag hours."""
     if renal and lab in _RENAL_MARKERS:
