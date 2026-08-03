@@ -650,17 +650,18 @@ def _fit_source_prior_tables(
 
     # patient_procedures — intersect with vendored CPT list when possible
     if "patient_procedures" in train_tables:
-        pp = train_tables["patient_procedures"].select("hospitalization_id", "procedure_code").collect()
+        pp = (
+            train_tables["patient_procedures"]
+            .select("hospitalization_id", "procedure_code")
+            .collect()
+        )
         try:
             vendored = {row["procedure_code"] for row in loader.code_list("patient_procedures")}
         except Exception:
             vendored = set()
         if vendored:
             filtered = pp.filter(pl.col("procedure_code").is_in(list(vendored)))
-            if filtered.height >= 20:
-                pp_fit = filtered
-            else:
-                pp_fit = pp
+            pp_fit = filtered if filtered.height >= 20 else pp
         else:
             pp_fit = pp
         params, rec = estimators.fit_top_k_category(pp_fit, "procedure_code", k=40)

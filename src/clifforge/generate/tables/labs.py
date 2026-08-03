@@ -132,10 +132,7 @@ def _apply_clinical_lab_bumps(
             value *= _SHOCK_VALUE_FACTOR
     elif lab in _SHOCK_MARKERS and not shock:
         # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ reference).
-        if not log_space:
-            value = min(value, 3.0)
-        else:
-            value = min(value, float(np.log1p(3.0)))
+        value = min(value, 3.0) if not log_space else min(value, float(np.log1p(3.0)))
     return value
 
 

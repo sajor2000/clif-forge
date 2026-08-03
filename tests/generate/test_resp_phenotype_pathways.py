@@ -42,7 +42,7 @@ def test_type1_escalates_nc_to_hfnc_to_imv() -> None:
 
 
 def test_gated_niv_keeps_phenotype_device_choice_without_inflating_rate() -> None:
-    """With reference-like niv probs, typed stays rarely get NIV; when they do, type picks device."""
+    """Gated NIV: typed stays rarely get NIV; when they do, type picks the device."""
     pack = demo_pack()
     pack.tables.setdefault("respiratory_support", {"params": {}})
     pack.tables["respiratory_support"]["params"]["niv"] = {

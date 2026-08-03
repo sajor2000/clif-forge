@@ -392,7 +392,18 @@ def sample_hospital_diagnosis(
         code_marginal if isinstance(code_marginal, dict) and code_marginal else None
     )
     # Acute / disease codes that must not be invented by filler without a flag.
-    blocked = {"N17.9", "N179", "R65.21", "R6521", "J96.00", "J9600", "J96.01", "J9601", "J96.02", "J9602"}
+    blocked = {
+        "N17.9",
+        "N179",
+        "R65.21",
+        "R6521",
+        "J96.00",
+        "J9600",
+        "J96.01",
+        "J9601",
+        "J96.02",
+        "J9602",
+    }
     guard = 0
     while len(rows) < target and guard < 120:
         guard += 1

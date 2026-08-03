@@ -16,9 +16,9 @@ def test_dashboard_priors_cited() -> None:
 def test_absent_generators_use_dashboard_constants() -> None:
     from clifforge.generate.tables import clinical_trial, key_icu_orders, microbiology_nonculture
 
-    assert clinical_trial._ENROLMENT_PROB == dashboard_priors.absent_table_rates["clinical_trial"]
-    assert key_icu_orders._REHAB_PROB == dashboard_priors.absent_table_rates["key_icu_orders"]
+    assert dashboard_priors.absent_table_rates["clinical_trial"] == clinical_trial._ENROLMENT_PROB
+    assert dashboard_priors.absent_table_rates["key_icu_orders"] == key_icu_orders._REHAB_PROB
     assert (
-        microbiology_nonculture._PANELS_PER_STAY
-        == dashboard_priors.absent_table_rates["microbiology_nonculture"]
+        dashboard_priors.absent_table_rates["microbiology_nonculture"]
+        == microbiology_nonculture._PANELS_PER_STAY
     )

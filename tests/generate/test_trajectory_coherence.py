@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import numpy as np
 
 from clifforge.demo import demo_pack
 from clifforge.generate.recalibrate import recalibrate_to_network_median
 from clifforge.generate.spine import sample_spine
-from clifforge.generate.tables.labs import sample_labs
+from clifforge.generate.tables.labs import _apply_clinical_lab_bumps, sample_labs
 from clifforge.generate.tables.medication_admin_continuous import (
     sample_medication_admin_continuous,
 )
@@ -71,13 +73,7 @@ def test_terminal_renal_raises_creatinine_over_stay() -> None:
     labs = sample_labs(spine, pack, np.random.default_rng(11))
     creat = [o for o in labs if o.lab_category == "creatinine"]
     assert creat
-    admit = creat[0].lab_order_dttm  # unused; map via order time → interval
-    # Rebuild interval index from order time relative to first order's day grid.
-    # Simpler: sample with known admit and check renal bump helper + flag pairing.
-    from datetime import UTC, datetime
-
-    from clifforge.generate.tables.labs import _apply_clinical_lab_bumps
-
+    # Sample with known flags and check renal bump helper + flag pairing.
     bumped = _apply_clinical_lab_bumps(
         "creatinine", 1.0, renal=True, renal_frac=1.0, shock=False, log_space=False
     )

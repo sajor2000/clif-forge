@@ -908,7 +908,8 @@ def fit_code_status_rates(
     """
     if "patient_id" not in code_status.columns or "code_status_category" not in code_status.columns:
         return {}, []
-    if "patient_id" not in hospitalization.columns or "discharge_category" not in hospitalization.columns:
+    hosp_cols = hospitalization.columns
+    if "patient_id" not in hosp_cols or "discharge_category" not in hosp_cols:
         return {}, []
 
     flags = (
