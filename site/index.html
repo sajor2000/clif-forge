@@ -295,7 +295,7 @@
       <div class="stage">
         <span class="k">04 · Sampled CLIF tables</span>
         <h3>CLIF 2.1-conformant Parquet</h3>
-        <p>Offline sampling emits 19 gated CLIF tables as Parquet — clinically coherent,
+        <p>Offline sampling emits all 28 CLIF 2.1 tables as Parquet — clinically coherent,
           and provably synthetic.</p>
       </div>
     </div>
@@ -349,7 +349,9 @@ git clone https://github.com/sajor2000/clif-forge.git</pre>
           data — and every one is reproducible from its recipe.</p>
 <pre><span class="c"># install and generate your own cohort</span>
 pip install git+https://github.com/sajor2000/clif-forge.git
-clif-forge generate <span class="k">--preset</span> high-acuity <span class="k">--n-patients</span> 5000 <span class="k">--out</span> ./my-icu</pre>
+clif-forge presets
+clif-forge generate <span class="k">--preset</span> high-acuity <span class="k">--n-patients</span> 5000 <span class="k">--out</span> ./my-icu
+<span class="c"># teaching rare events: --preset rare-support</span></pre>
       </div>
     </div>
   </div>
@@ -375,7 +377,8 @@ clif-forge generate <span class="k">--preset</span> high-acuity <span class="k">
         <div class="ic">⋯</div>
         <div><h3>Real missingness</h3>
           <p>Per-stay lab presence is correlated, so co-ordered panels — a metabolic panel,
-            an arterial blood gas — are measured together rather than independently.</p></div>
+            an arterial blood gas — are measured together rather than independently.
+            CI locks mean ABG co-occurrence on the shareable base pack.</p></div>
       </div>
       <div class="feat">
         <div class="ic">↗</div>
@@ -409,7 +412,8 @@ clif-forge generate <span class="k">--preset</span> high-acuity <span class="k">
           <tr><td class="lever">Population shape</td><td>ICU cohort vs. whole-hospital population</td><td><span class="tag">mode</span></td></tr>
           <tr><td class="lever">Size</td><td>Any number of encounters, on any machine</td><td><span class="tag">n</span></td></tr>
           <tr><td class="lever">Demographics</td><td>Age shift, Hispanic fraction, exact race mix</td><td><span class="tag">age_shift, race_target</span></td></tr>
-          <tr><td class="lever">Illness rates</td><td>Ventilation, mortality, vasopressors, CRRT, proning</td><td><span class="tag">imv, mortality_scale…</span></td></tr>
+          <tr><td class="lever">Illness rates</td><td>Ventilation, mortality, vasopressors, CRRT, proning, rare-event ECMO</td><td><span class="tag">imv, ecmo_stay…</span></td></tr>
+          <tr><td class="lever">Presets</td><td>Shipped recipes: high-acuity, older-cohort, sepsis-heavy, rare-support</td><td><span class="tag">--preset / clif-forge presets</span></td></tr>
           <tr><td class="lever">Patient flow</td><td>Admission mix, ward→ICU and outside-hospital→ICU transfers</td><td><span class="tag">admission_route</span></td></tr>
           <tr><td class="lever">Compute footprint</td><td>RAM and CPU dials — any cohort runs on an ordinary laptop</td><td><span class="tag">--chunk-size, --max-threads</span></td></tr>
         </tbody>
@@ -425,7 +429,7 @@ clif-forge generate <span class="k">--preset</span> high-acuity <span class="k">
     <div class="stats" style="margin-top:28px">
       <div class="stat"><div class="n">85k</div><div class="l">encounter ICU cohort master</div></div>
       <div class="stat"><div class="n">365k</div><div class="l">whole-hospital population master</div></div>
-      <div class="stat"><div class="n">19</div><div class="l">CLIF tables generated &amp; gated</div></div>
+      <div class="stat"><div class="n">28</div><div class="l">CLIF 2.1 tables generated &amp; gated</div></div>
       <div class="stat"><div class="n">0</div><div class="l">real records in the output</div></div>
     </div>
   </div>

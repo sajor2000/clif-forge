@@ -6,8 +6,8 @@ inlines its own CSS/JS and works opened directly in a browser.
 
 | File | What it is |
 |---|---|
-| `index.html` | Landing page — the two-way pitch (use the data / pull the levers), why it's realistic, the levers, and the CLIF-version roadmap. |
-| `validation.html` | The synthetic-vs-real validation report — ICU and whole-hospital audits against real CLIF, with the deterioration-toward-death trajectory charts. |
+| `index.html` | Landing page — the two-way pitch (use the data / pull the levers), why it's realistic, the levers (including presets / rare-support), and the CLIF-version roadmap. |
+| `validation.html` | The synthetic-vs-real validation report — ICU and whole-hospital audits against real CLIF, with the deterioration-toward-death trajectory charts and a note on the always-on network-median CI envelope. |
 
 ## Hosting
 

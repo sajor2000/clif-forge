@@ -20,11 +20,13 @@ Two ways to use it:
    repo; full-size 85k-ICU and 365k whole-hospital masters at https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0.
 2. **Make your own** — `pip install`, tweak a short recipe, and generate a *distinct*
    but still-realistic cohort. You control the levers: population shape (ICU vs.
-   whole-hospital), size, demographics, illness rates, and compute footprint.
+   whole-hospital), size, demographics, illness rates (including rare-event ECMO via
+   `rare-support`), and compute footprint. List recipes with `clif-forge presets`.
 
 It's not random data — distributions, trajectories, and organ-support couplings are
 fit to real aggregate CLIF statistics, so the output lands in the real statistical
-region while being provably synthetic (no real record leaves the fit stage).
+region while being provably synthetic (no real record leaves the fit stage). CI locks
+network-median rates on the shareable base pack without needing a DUA.
 
 CLIF 2.1 today; the engine is built to add 3.0 and future versions.
 
@@ -57,9 +59,10 @@ teaching material, reproducible demos, and model or agent development.
    distinct from everyone else's but still looks like the real thing. You control the
    levers: population shape (ICU cohort vs. whole-hospital with realistic patient
    flow), cohort size, demographics (age, ethnicity, race mix), illness rates
-   (ventilation, mortality, vasopressors, CRRT, proning), and compute footprint (it
-   runs on an ordinary laptop; RAM and CPU are dials). No two recipes produce the same
-   data, and every dataset is reproducible from its recipe.
+   (ventilation, mortality, vasopressors, CRRT, proning, optional rare-event ECMO via
+   the `rare-support` preset), and compute footprint (it runs on an ordinary laptop;
+   RAM and CPU are dials). List shipped recipes with `clif-forge presets`. No two
+   recipes produce the same data, and every dataset is reproducible from its recipe.
 
 **Why it looks real, not random.** CLIFForge fits distributions, couplings, and
 patient trajectories to *aggregate* CLIF statistics, then samples offline from a
@@ -68,7 +71,8 @@ length-of-stay tails, and organ-support couplings (vasopressors with hypotension
 sedation with ventilation) all track the real cohort — while remaining provably
 synthetic: no row-level record leaves the fit stage, and no synthetic patient traces
 back to a real one (verified with distance-to-closest-record and identifiability
-metrics).
+metrics). Continuous integration also locks network-median rates (LOS, life support,
+ABG co-occurrence) against the shareable base pack — no DUA required for that gate.
 
 **Versions.** CLIF 2.1 is available today. The engine is schema-driven, so CLIF 3.0
 and later versions can be added as a refit step — the aim is one place to pull

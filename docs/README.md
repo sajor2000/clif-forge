@@ -7,8 +7,10 @@ here go deeper.
 | File | What it is | For whom |
 |---|---|---|
 | [`../PROVENANCE.md`](../PROVENANCE.md) | **Table catalog** — all 28 CLIF 2.1 tables + spine; fitted / prior / derived; fitted ICU realism changelog | Anyone auditing how a table was produced |
+| [`../CONCEPTS.md`](../CONCEPTS.md) | Shared domain vocabulary (param pack, pack-prefer, stay prevalence, realism envelope) | Contributors reading code or solutions docs |
 | [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) | The deterministic, seeded pipeline (real CLIF → pack → dataset), and how any artifact regenerates | Anyone reproducing or auditing a dataset |
 | [`CONSORTIUM_ANNOUNCEMENT.md`](CONSORTIUM_ANNOUNCEMENT.md) | Copy-paste Slack + email blurbs announcing CLIFForge | The project owner, when sharing it |
+| [`solutions/`](solutions) | Compounded learnings (e.g. stay-prevalence vs intensity, CI envelope locks) | Maintainers debugging realism / CI |
 | [`plans/`](plans) | Historical design plans (founding generator; realism gaps; master + derivatives) | Contributors and maintainers |
 
 ## About `plans/`
