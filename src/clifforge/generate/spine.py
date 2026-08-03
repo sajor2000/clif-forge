@@ -286,7 +286,7 @@ def sample_spine(
     # L4 = +vaso, L5 = +CRRT. Recalibrate's ``flag_target_prevalence`` deliberately
     # decouples marginal rates, but leaving L4/L5 stays without cv/renal flags makes
     # vitals/labs/meds/resp disagree longitudinally ("sicker" acuity without shock
-    # physiology). Soft Bernoulli on L4→cv keeps MIMIC vaso|IMV (~0.60).
+    # physiology). Soft Bernoulli on L4→cv keeps reference vaso|IMV (~0.60).
     _recouple_ladder_organs(
         support_level,
         flags,
@@ -345,12 +345,12 @@ _DEFAULT_TERMINAL_ARCHETYPE_MIX: dict[str, float] = {
 _VASO_MIN_SUPPORT_LEVEL = 4
 _CRRT_MIN_SUPPORT_LEVEL = 5
 
-#: MIMIC ICU conditionals (±2 pp targets for ``recalibrate_mimic_icu``).
+#: reference ICU conditionals (±2 pp targets for ``recalibrate_fitted_icu``).
 #: ``terminal_imv_prob`` = P(invent late IMV | death ∧ never-IMV), not stay-level.
 _DEFAULT_TERMINAL_IMV_PROB = 0.20
 _DEFAULT_TERMINAL_VASO_PROB = 0.58
 _DEFAULT_TERMINAL_RENAL_PROB = 0.40
-#: Soft L4→cv re-couple rate so vaso|IMV lands near MIMIC (~0.60), not 1.0.
+#: Soft L4→cv re-couple rate so vaso|IMV lands near reference (~0.60), not 1.0.
 _DEFAULT_LADDER_CV_PROB = 0.55
 
 
@@ -365,7 +365,7 @@ def _recouple_ladder_organs(
 
     L4 = IMV+vaso, L5 = +CRRT. Coupling is a **stay-level** Bernoulli when any
     L4+ interval exists (per-interval draws made long L4 runs saturate to cv=1
-    and blew past MIMIC vaso|IMV / vaso|death). L5→renal stays hard (rare).
+    and blew past reference vaso|IMV / vaso|death). L5→renal stays hard (rare).
     """
     has_l4 = any(level >= _VASO_MIN_SUPPORT_LEVEL for level in support_level)
     couple_cv = has_l4 and rng.random() < ladder_cv_prob
@@ -413,10 +413,10 @@ def _apply_terminal_deterioration(
     * ``abrupt`` — a short, steep collapse when vented; shock/renal by Bernoulli.
     * ``prolonged`` — laddered climb among IMV deaths; organs fail in sequence.
     * ``comfort`` — device withdrawal; optional shock physiology without inventing
-      IMV on every death (MIMIC: ~33% of ICU deaths never receive IMV).
+      IMV on every death (reference: ~33% of ICU deaths never receive IMV).
 
     Stay-level Bernoulli draws (``imv_prob`` / ``vaso_prob`` / ``renal_prob``)
-    target MIMIC conditionals P(IMV|death)≈0.67, P(vaso|death)≈0.58.
+    target reference conditionals P(IMV|death)≈0.67, P(vaso|death)≈0.58.
     """
     n = len(support_level)
     if n == 0:
@@ -429,7 +429,7 @@ def _apply_terminal_deterioration(
     pre_peak = max(support_level[:start], default=max(support_level, default=0))
     already_imv = pre_peak >= 3
     # ``imv_prob`` is the *invent* rate among never-ventilated deaths. Already-IMV
-    # decedents stay counted; together they target MIMIC P(IMV|expired)≈0.67.
+    # decedents stay counted; together they target reference P(IMV|expired)≈0.67.
     do_imv = already_imv or (rng.random() < imv_prob)
     do_vaso = rng.random() < vaso_prob
     do_renal = rng.random() < renal_prob

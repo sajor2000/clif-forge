@@ -2,7 +2,7 @@
 
 Where ``hospital_diagnosis`` is the *billed* record of one encounter,
 ``patient_diagnosis`` is the clinical one: problem list / medical history plus
-encounter-level diagnoses. Chronic and cancer load use the same MIMIC ICU
+encounter-level diagnoses. Chronic and cancer load use the same reference ICU
 stay-prevalence priors and acuity scaling as ``hospital_diagnosis`` so the two
 tables agree on case mix (KTD-6).
 

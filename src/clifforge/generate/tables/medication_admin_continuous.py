@@ -232,7 +232,7 @@ def _fitted_infusions(
         emit(_VASOPRESSOR, cv[int(rng.integers(len(cv)))])
 
     # Guaranteed sedative for most IMV stays (ICU doctor logic: ventilated →
-    # sedated). Rate defaults to MIMIC P(sedation|IMV)≈0.85 so we pair without
+    # sedated). Rate defaults to reference P(sedation|IMV)≈0.85 so we pair without
     # saturating every short/comfort IMV window.
     sed_imv_prob = float(params.get("sedation_imv_prob", 1.0))
     if imv and rng.random() < sed_imv_prob:
@@ -262,7 +262,7 @@ def _fitted_infusions(
     if params.get("sedation_per_imv", True):
         # Sedatives only via the stay-level IMV Bernoulli above — strip from the
         # LOS-scaling draw so long IMV stays don't saturate to sedation|IMV=1.0
-        # (MIMIC is ~0.85).
+        # (reference is ~0.85).
         draw_marginal = {m: w for m, w in draw_marginal.items() if m not in _SEDATIVES}
     total = sum(draw_marginal.values())
     draw_marginal = {m: w / total for m, w in draw_marginal.items()} if total > 0 else marginal
@@ -303,7 +303,7 @@ def sample_medication_admin_continuous(
     vaso_active = list(spine.cv_flag)
     sed_active = [level >= IMV_MIN_SUPPORT_LEVEL for level in spine.support_level]
     # Optional stay-level Bernoulli (``sedation_imv_prob``); default 1.0 keeps
-    # demo/default packs fully paired. Recalibrate sets ~0.85 to match MIMIC.
+    # demo/default packs fully paired. Recalibrate sets ~0.85 to match the reference.
     if any(sed_active) and rng.random() >= float(params.get("sedation_imv_prob", 1.0)):
         sed_active = [False] * len(sed_active)
     rows = _infusion_rows(

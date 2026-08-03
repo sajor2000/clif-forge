@@ -210,7 +210,7 @@ def test_creatinine_rises_under_renal_failure() -> None:
 # Empirical-quantile (inverse-CDF) marginals
 # --------------------------------------------------------------------------- #
 # A distinctly non-log-normal creatinine marginal: a two-mode distribution with
-# ~half the mass near 0.8 and ~half near 6.0 (mimicking a normal-renal cluster plus
+# ~half the mass near 0.8 and ~half near 6.0 (resembling a normal-renal cluster plus
 # a CKD tail), which a single log-normal cannot represent. On the 101-point grid,
 # probs < 0.50 map to 0.8, probs > 0.50 map to 6.0.
 _BIMODAL_CREATININE = [0.8] * 50 + [6.0] * 51

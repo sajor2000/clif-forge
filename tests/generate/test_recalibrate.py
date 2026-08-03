@@ -445,7 +445,7 @@ def test_terminal_archetypes_vary_across_stays() -> None:
 
 
 def test_aggregate_escalation_dominates_but_not_uniform() -> None:
-    # With MIMIC-like invent rates, a substantial but not universal share of
+    # With reference-like invent rates, a substantial but not universal share of
     # decedents end at high vent — not stereotyped 100%.
     pack = recalibrate_to_network_median(_pack(expired_rate=1.0), terminal_deterioration_hours=24.0)
     n, high = 200, 0

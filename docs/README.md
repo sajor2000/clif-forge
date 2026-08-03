@@ -6,7 +6,7 @@ here go deeper.
 
 | File | What it is | For whom |
 |---|---|---|
-| [`../PROVENANCE.md`](../PROVENANCE.md) | **Table catalog** — all 28 CLIF 2.1 tables + spine; fitted / prior / derived; MIMIC realism changelog | Anyone auditing how a table was produced |
+| [`../PROVENANCE.md`](../PROVENANCE.md) | **Table catalog** — all 28 CLIF 2.1 tables + spine; fitted / prior / derived; fitted ICU realism changelog | Anyone auditing how a table was produced |
 | [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) | The deterministic, seeded pipeline (real CLIF → pack → dataset), and how any artifact regenerates | Anyone reproducing or auditing a dataset |
 | [`CONSORTIUM_ANNOUNCEMENT.md`](CONSORTIUM_ANNOUNCEMENT.md) | Copy-paste Slack + email blurbs announcing CLIFForge | The project owner, when sharing it |
 | [`plans/`](plans) | Historical design plans (founding generator; realism gaps; master + derivatives) | Contributors and maintainers |

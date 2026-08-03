@@ -77,7 +77,7 @@ _RENAL_LOG_SHIFT = 0.75
 #: Value-space equivalent of the log1p-space renal shift, for the empirical-quantile
 #: marginal path (which produces a value directly, not a log1p value): a multiplicative
 #: bump ``exp(_RENAL_LOG_SHIFT)`` (~2.1), so creatinine/bun still rise with renal
-#: failure and CRRT stays land in the top creat quartile (MIMIC high_creat|CRRT≈0.97).
+#: failure and CRRT stays land in the top creat quartile (reference high_creat|CRRT≈0.97).
 _RENAL_VALUE_FACTOR = float(np.exp(_RENAL_LOG_SHIFT))
 #: Progressive renal derangement: consecutive renal-flag hours scale the bump up
 #: toward full strength over ~12h so creat *rises* within a stay (sicker→sicker).
@@ -131,7 +131,7 @@ def _apply_clinical_lab_bumps(
         else:
             value *= _SHOCK_VALUE_FACTOR
     elif lab in _SHOCK_MARKERS and not shock:
-        # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ MIMIC).
+        # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ reference).
         if not log_space:
             value = min(value, 3.0)
         else:

@@ -42,7 +42,7 @@ def test_type1_escalates_nc_to_hfnc_to_imv() -> None:
 
 
 def test_gated_niv_keeps_phenotype_device_choice_without_inflating_rate() -> None:
-    """With MIMIC-like niv probs, typed stays rarely get NIV; when they do, type picks device."""
+    """With reference-like niv probs, typed stays rarely get NIV; when they do, type picks device."""
     pack = demo_pack()
     pack.tables.setdefault("respiratory_support", {"params": {}})
     pack.tables["respiratory_support"]["params"]["niv"] = {
@@ -57,7 +57,7 @@ def test_gated_niv_keeps_phenotype_device_choice_without_inflating_rate() -> Non
         n += 1
         n_hfnc += "High Flow NC" in cats
         n_nippv += "NIPPV" in cats
-    # Combined NIV stay rate near MIMIC any-NIV (~0.13), not ~0.7
+    # Combined NIV stay rate near reference any-NIV (~0.13), not ~0.7
     assert 0.05 < (n_hfnc + n_nippv) / n < 0.25
     # Type1 seeds (even) should not mint NIPPV; type2 (odd) should not mint HFNC
     # Spot-check: among HFNC stays, majority are type1 pathway draws.

@@ -16,11 +16,11 @@ Usage::
         --synthetic ~/Desktop/clif_synthetic_chicago_icu_corrected \
         --real ~/Data/clif --out validation.json
 
-    # Local MIMIC-IV Ext CLIF extract (untagged ``clif_<table>.parquet``)::
+    # Local source CLIF extract extract (untagged ``clif_<table>.parquet``)::
 
     uv run python scripts/validate_against_real.py \
         --synthetic sample_dataset \
-        --real ~/Data/clif-mimic --out validation_mimic.json
+        --real ~/Data/clif-source --out validation_fitted.json
 """
 
 from __future__ import annotations
@@ -61,10 +61,10 @@ _VASO_CATS = frozenset(
     {"norepinephrine", "vasopressin", "epinephrine", "phenylephrine", "dopamine"}
 )
 
-#: Clinical notes after MIMIC calibration choices.
+#: Clinical notes after fitted calibration choices.
 CLINICAL_QUESTIONS: tuple[str, ...] = (
-    "Decedent physiology kept steeper than MIMIC (terminal_vaso=0.35, "
-    "terminal_renal=0.40). CRRT gate crrt_prob=0.95 → stay CRRT ~6–8% vs MIMIC 4%.",
+    "Decedent physiology kept steeper than reference (terminal_vaso=0.35, "
+    "terminal_renal=0.40). CRRT gate crrt_prob=0.95 → stay CRRT ~6–8% vs reference 4%.",
 )
 
 
@@ -344,7 +344,7 @@ def validate(synthetic: Path, real: Path) -> dict[str, Any]:
             "real": round(float(rhosp["age_at_admission"].median() or 0.0), 1),
         }
 
-    # Full device_category mix (row share) for MIMIC respiratory_support audits.
+    # Full device_category mix (row share) for reference respiratory_support audits.
     def _device_mix(rs: pl.DataFrame) -> dict[str, float]:
         if rs.height == 0 or "device_category" not in rs.columns:
             return {}
@@ -362,7 +362,7 @@ def validate(synthetic: Path, real: Path) -> dict[str, Any]:
         "real": _device_mix(rrs),
     }
 
-    # Culture yield: share of cultures with a non-null organism (MIMIC may be empty).
+    # Culture yield: share of cultures with a non-null organism (the source extract may be empty).
     def _culture_yield(base: Path, ids: pl.Series | None) -> float | None:
         path = _table(base, "microbiology_culture")
         if not path.exists():
@@ -726,7 +726,7 @@ def _fmt(d: dict[str, Any]) -> str:
             if s is not None and r is not None and abs(float(s) - float(r)) > 0.15:
                 flag = "  ⚠"
             lines.append(f"  {k:28s} synth {s}  real {r}{flag}")
-    lines.append("\nclinical questions (no single MIMIC answer):")
+    lines.append("\nclinical questions (no single reference answer):")
     for q in CLINICAL_QUESTIONS:
         lines.append(f"  • {q}")
     return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""Unit tests for MIMIC prior-table estimators (all-28 realism)."""
+"""Unit tests for reference prior-table estimators (all-28 realism)."""
 
 from __future__ import annotations
 

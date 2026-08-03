@@ -1,9 +1,9 @@
-# MIMIC-empirical ICU sample: fitted ``mimic_all28`` pack + validated
-# ``recalibrate_mimic_icu`` (spine tempering, sojourn/LOS, gated NIV, ADT arrivals).
+# fitted-empirical ICU sample: fitted ``icu_all28`` pack + validated
+# ``recalibrate_fitted_icu`` (spine tempering, sojourn/LOS, gated NIV, ADT arrivals).
 # Committed at n=5000 / seed 42 so every parquet stays under GitHub's 50 MB soft
 # limit (vitals ≈ 41 MB).
-name = "mimic-icu-sample"
+name = "fitted-icu-sample"
 n = 5000
 seed = 42
-base_pack = "data/param_packs/mimic_all28"
-mode = "mimic_icu"
+base_pack = "data/param_packs/icu_all28"
+mode = "fitted_icu"

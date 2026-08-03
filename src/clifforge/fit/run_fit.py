@@ -305,7 +305,7 @@ def _record_table(
     field_audit[name] = _field_sources(name, source_columns, modeled)
 
 
-def _fit_mimic_prior_tables(
+def _fit_source_prior_tables(
     train_tables: dict[str, pl.LazyFrame],
     tables: dict[str, pl.LazyFrame],
     table_blocks: dict[str, dict[str, object]],
@@ -314,7 +314,7 @@ def _fit_mimic_prior_tables(
     *,
     n_hospitalizations: int,
 ) -> None:
-    """Fit MIMIC-present tables that were previously prior/spine-only."""
+    """Fit source-present tables that were previously prior/spine-only."""
     # code_status (patient-level)
     if "code_status" in train_tables and "hospitalization" in train_tables:
         cs_df = train_tables["code_status"].collect()
@@ -337,7 +337,7 @@ def _fit_mimic_prior_tables(
         params, rec = estimators.fit_categorical_marginals(
             adt_df, ("location_category", "location_type", "hospital_type")
         )
-        # location_type must be mCIDE-conformant for generation (MIMIC uses site
+        # location_type must be mCIDE-conformant for generation (the source extract uses site
         # labels like ``cvicu_icu`` that are not in the consortium vocabulary).
         try:
             valid_loc = set(loader.categories("adt", "location_type"))
@@ -378,7 +378,7 @@ def _fit_mimic_prior_tables(
         cont, crec = estimators.fit_continuous_marginals(
             rs_df, ("fio2_set", "peep_set", "tidal_volume_set", "resp_rate_set")
         )
-        # Drop quantile edges that fall outside consortium bounds (MIMIC chart noise).
+        # Drop quantile edges that fall outside consortium bounds (source chart noise).
         for field, edges_key in (
             ("fio2_set", "fio2_set_quantile_bin_edges"),
             ("peep_set", "peep_set_quantile_bin_edges"),
@@ -810,7 +810,7 @@ def run_fit(
             **f_params,
             "state_model": config.as_manifest(),
             # Validated trajectory defaults (same knobs recalibrate_to_network_median
-            # sets). Empirical MIMIC spine rates are preserved; these only enable the
+            # sets). Empirical reference spine rates are preserved; these only enable the
             # terminal-decline path the generators already honor.
             "terminal_deterioration_hours": 24.0,
         },
@@ -913,9 +913,9 @@ def run_fit(
             _MODELED_COLUMNS["medication_admin_continuous"],
         )
 
-    # --- MIMIC-present prior tables (all-28 realism pack) ------------------
+    # --- source-present prior tables (all-28 realism pack) ------------------
     n_hosp = len(train_hosp_set)
-    _fit_mimic_prior_tables(
+    _fit_source_prior_tables(
         train_tables,
         tables,
         table_blocks,

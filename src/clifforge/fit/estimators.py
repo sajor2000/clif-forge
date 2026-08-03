@@ -815,7 +815,7 @@ def fit_infusion_hazards(
 
 
 # --------------------------------------------------------------------------- #
-# Prior-table estimators (MIMIC Ext CLIF realism / all-28 pack)
+# Prior-table estimators (source CLIF realism / all-28 pack)
 # --------------------------------------------------------------------------- #
 #: Code-status categories that count as a de-escalation from Full.
 _DNR_LIKE: frozenset[str] = frozenset(
@@ -1045,7 +1045,7 @@ def fit_adt_arrival(
 
     Emits the same parameter names the ADT generator already consumes
     (``arrival_location_marginal``, ``direct_icu_frac``) — the path exercised by
-    full-hospital / network-median recalibration — so MIMIC realism plugs into the
+    full-hospital / network-median recalibration — so fitted ICU realism plugs into the
     proven arrival machinery rather than inventing a parallel one.
 
     * ``arrival_location_marginal`` — first ``location_category`` among stays that

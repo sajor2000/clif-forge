@@ -7,8 +7,8 @@ anything or holding any credential.
 
 - **5,000 ICU encounters**, all 28 canonical CLIF 2.1 tables plus `_truth.parquet`
   (latent spine).
-- Built from the **`mimic_all28`** parameter pack (fit on local MIMIC-IV Ext CLIF)
-  through the validated **`recalibrate_mimic_icu`** path: spine tempering, LOS
+- Built from the **`icu_all28`** parameter pack (fit on local source CLIF extract)
+  through the validated **`recalibrate_fitted_icu`** path: spine tempering, LOS
   sojourns, gated NIV, terminal deterioration, RF phenotypes, and ADT front-door
   arrivals (`arrival_location_marginal` + `direct_icu_frac`).
 
@@ -25,15 +25,15 @@ anything or holding any credential.
   with the administrations given under it.
 - **Reproducible byte-for-byte** — regenerate from the committed pack, spec, and
   seed (see below).
-- **MIMIC-empirical rates** — IMV / mortality / NIV / ADT arrivals / diagnosis
-  case-mix track the local MIMIC ICU cohort within the validated envelope.
+- **Empirical rates** — IMV / mortality / NIV / ADT arrivals / diagnosis
+  case-mix track the local reference ICU cohort within the validated envelope.
 
 ## Reproduce it
 
 ```bash
 uv run clif-forge generate \
     --spec sample_dataset/spec.toml \
-    --base-pack data/param_packs/mimic_all28 \
+    --base-pack data/param_packs/icu_all28 \
     --n-patients 5000 --seed 42 --out ./reproduced
 ```
 

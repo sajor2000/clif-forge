@@ -1,8 +1,8 @@
-"""Vendored CLIF Consortium cohort-dashboard priors (MIMIC-absent tables).
+"""Vendored CLIF Consortium cohort-dashboard priors (source-absent tables).
 
 Source: https://clif-icu.com/cohort Summary Statistics / Advanced Support
-(retrieved 2026-08-02). Used only for tables local MIMIC-IV Ext CLIF does not
-ship; MIMIC-fitted pack blocks always win when present.
+(retrieved 2026-08-02). Used only for tables local source CLIF extract does not
+ship; fitted pack blocks always win when present.
 """
 
 from __future__ import annotations
@@ -24,9 +24,8 @@ DASHBOARD_RETRIEVED_AT = "2026-08-02"
 DASHBOARD_CITATION = (
     "CLIF Consortium Cohort Dashboard Summary Statistics / Advanced Support "
     f"({DASHBOARD_SOURCE_URL}, retrieved {DASHBOARD_RETRIEVED_AT}). "
-    "Aggregated, de-identified consortium rates; MIMIC-IV included upstream for "
-    "benchmarking. Used here only for CLIF tables absent from the local MIMIC Ext "
-    "CLIF extract."
+    "Aggregated, de-identified consortium rates. Used here only for CLIF tables "
+    "absent from the local source CLIF extract."
 )
 
 #: Critically-ill cohort demographics (dashboard Summary Statistics).
@@ -87,7 +86,7 @@ vent_setting_medians: dict[str, float] = {
     "resp_rate_set": 16.0,
 }
 
-#: Stay-level rates for MIMIC-absent prior-driven tables (literature-scaled to
+#: Stay-level rates for source-absent prior-driven tables (literature-scaled to
 #: dashboard acuity where no dashboard cell exists).
 absent_table_rates: dict[str, float] = {
     # Rare / Concept tables: low per-stay rates consistent with ICU acuity.

@@ -30,7 +30,7 @@ from clifforge.reference import bounds
 __all__ = ["CrrtRow", "crrt_therapy_frame", "sample_crrt_therapy"]
 
 _CRRT_MODE = "cvvhdf"
-#: Require sustained renal failure before CRRT so creat has risen (MIMIC:
+#: Require sustained renal failure before CRRT so creat has risen (reference:
 #: high_creat|CRRT ≈ 0.97 — nearly all CRRT stays are top-quartile creatinine).
 _MIN_RENAL_HOURS_BEFORE_CRRT = 12.0
 

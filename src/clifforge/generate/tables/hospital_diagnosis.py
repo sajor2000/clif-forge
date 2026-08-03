@@ -2,12 +2,12 @@
 
 Billing diagnoses are the coded record of what an encounter was *about*. Acute
 organ-failure codes are read off the spine's flags (KTD-6); chronic comorbidity /
-cancer load is drawn from **MIMIC ICU stay-prevalence priors**, scaled up for
+cancer load is drawn from **reference ICU stay-prevalence priors**, scaled up for
 higher peak acuity and expired outcomes so sicker stays carry more chronics —
 matching the real case-mix pattern (not independent coin-flips).
 
 Codes are **ICD-10-CM**. A fitted ``diagnosis_code_marginal`` (when present) only
-pads the list toward MIMIC code-density (~18/stay); it never replaces the
+pads the list toward reference code-density (~18/stay); it never replaces the
 calibrated comorbidity / cancer layer.
 
 Reproducible under a fixed ``rng`` (R22).
@@ -73,7 +73,7 @@ _PRINCIPAL_MIX: dict[str, float] = {
     "R69": 0.04,  # illness, unspecified
 }
 
-#: MIMIC ICU stay-level disease priors: (family, codes to pick among, base stay rate).
+#: reference ICU stay-level disease priors: (family, codes to pick among, base stay rate).
 #: One draw per family so HTN/CKD staging codes do not stack into near-100% rates.
 _DISEASE_PRIORS: tuple[tuple[str, tuple[str, ...], float], ...] = (
     ("htn", ("I10",), 0.60),
@@ -82,7 +82,7 @@ _DISEASE_PRIORS: tuple[tuple[str, tuple[str, ...], float], ...] = (
     ("cad", ("I25.10",), 0.31),
     ("afib", ("I48.91",), 0.27),
     ("hf", ("I50.9",), 0.16),
-    ("copd", ("J44.9",), 0.0),  # coded via type2_copd phenotype force (~MIMIC 0.15)
+    ("copd", ("J44.9",), 0.0),  # coded via type2_copd phenotype force (~reference 0.15)
     ("ckd", ("N18.3", "N18.4", "N18.5"), 0.18),
     ("obesity", ("E66.9",), 0.05),
     ("liver", ("K74.60", "K70.30"), 0.05),
@@ -101,7 +101,7 @@ _COMORBIDITY_CODES: tuple[tuple[str, float], ...] = tuple(
     (codes[0], rate) for _, codes, rate in _DISEASE_PRIORS
 )
 
-#: Any-cancer stay rate ~0.21 in MIMIC ICU; draw once then pick a site / history code.
+#: Any-cancer stay rate ~0.21 in reference ICU; draw once then pick a site / history code.
 _CANCER_BASE_RATE = 0.18
 _CANCER_CODES: tuple[str, ...] = (
     "C34.90",
@@ -117,7 +117,7 @@ _CANCER_CODES: tuple[str, ...] = (
     "Z85.038",
 )
 
-#: Non-disease secondaries used to pad toward MIMIC code density (~18/stay).
+#: Non-disease secondaries used to pad toward reference code density (~18/stay).
 _SAFE_FILLERS: dict[str, float] = {
     "Z87.891": 0.12,
     "K21.9": 0.10,
@@ -224,7 +224,7 @@ def _first_true(flags: list[bool]) -> int | None:
 
 
 def _disease_rate(family: str, base: float, spine: SpineFrame) -> float:
-    """Light additive acuity bumps (MIMIC: expired / high-peak carry more chronics)."""
+    """Light additive acuity bumps (reference: expired / high-peak carry more chronics)."""
     p = base
     if spine.outcome == "expired":
         p += 0.07
@@ -254,7 +254,7 @@ def _acuity_comorbidity_boost(spine: SpineFrame) -> float:
 
 
 def _target_code_count(spine: SpineFrame, rng: np.random.Generator) -> int:
-    """MIMIC ICU mean ~18 codes/stay; sicker stays run denser."""
+    """reference ICU mean ~18 codes/stay; sicker stays run denser."""
     base = int(rng.integers(14, 20))
     if spine.outcome == "expired":
         base += int(rng.integers(3, 7))
@@ -377,7 +377,7 @@ def sample_hospital_diagnosis(
 
     cancer_p = _disease_rate("cancer", _CANCER_BASE_RATE, spine)
     if spine.outcome == "expired":
-        cancer_p = min(0.55, cancer_p + 0.06)  # MIMIC: expired cancer ~0.31
+        cancer_p = min(0.55, cancer_p + 0.06)  # reference: expired cancer ~0.31
     if rng.random() < cancer_p:
         code = _CANCER_CODES[int(rng.integers(0, len(_CANCER_CODES)))]
         if code not in seen:

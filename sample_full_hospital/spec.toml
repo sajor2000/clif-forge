@@ -1,7 +1,7 @@
-# Full-hospital sample: MIMIC clinical tables + validated ward/ED/ICU mix
+# Full-hospital sample: reference clinical tables + validated ward/ED/ICU mix
 
-name = "mimic-full-hospital-sample"
+name = "fitted-full-hospital-sample"
 n = 5000
 seed = 42
-base_pack = "data/param_packs/mimic_all28"
+base_pack = "data/param_packs/icu_all28"
 mode = "full_hospital"

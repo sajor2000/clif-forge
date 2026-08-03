@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Emit the realism-source matrix for all 28 CLIF tables.
 
-For each canonical table reports whether generation is driven by a MIMIC-fitted
+For each canonical table reports whether generation is driven by a fitted
 pack block, a vendored clif-icu.com cohort dashboard prior, or derivation from
 a parent table.
 
 Usage::
 
-    uv run python scripts/audit_realism_sources.py [--pack data/param_packs/mimic_all28]
+    uv run python scripts/audit_realism_sources.py [--pack data/param_packs/icu_all28]
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 from clifforge.fit.param_pack import ParamPack
 from clifforge.reference import dashboard_priors, loader
 
-#: Tables local MIMIC Ext CLIF ships under ``~/Data/clif-mimic``.
-MIMIC_TABLES: frozenset[str] = frozenset(
+#: Tables local source CLIF ships under ``~/Data/clif-source``.
+SOURCE_CLIF_TABLES: frozenset[str] = frozenset(
     {
         "adt",
         "code_status",
@@ -41,7 +41,7 @@ MIMIC_TABLES: frozenset[str] = frozenset(
     }
 )
 
-#: Tables with no MIMIC file — dashboard / literature priors.
+#: Tables with no reference file — dashboard / literature priors.
 DASHBOARD_TABLES: frozenset[str] = frozenset(
     {
         "clinical_trial",
@@ -76,12 +76,12 @@ def _source_for(table: str, pack: ParamPack | None) -> dict[str, object]:
             if table == "medication_orders"
             else "microbiology_susceptibility ← microbiology_culture"
         )
-    elif fitted and table in MIMIC_TABLES:
-        kind = "mimic_fit"
+    elif fitted and table in SOURCE_CLIF_TABLES:
+        kind = "source_fit"
         detail = f"pack.tables[{table!r}].params"
-    elif table in MIMIC_TABLES:
-        kind = "mimic_pending"
-        detail = "MIMIC parquet present; pack block not yet fitted (spine/prior path)"
+    elif table in SOURCE_CLIF_TABLES:
+        kind = "source_pending"
+        detail = "source parquet present; pack block not yet fitted (spine/prior path)"
     elif table in DASHBOARD_TABLES:
         kind = "dashboard_prior"
         detail = dashboard_priors.DASHBOARD_SOURCE_URL
@@ -111,7 +111,7 @@ def main() -> int:
             "url": dashboard_priors.DASHBOARD_SOURCE_URL,
             "retrieved_at": dashboard_priors.DASHBOARD_RETRIEVED_AT,
         },
-        "mimic_tables": sorted(MIMIC_TABLES),
+        "source_clif_tables": sorted(SOURCE_CLIF_TABLES),
         "spine_fitted": spine_fitted,
         "tables": rows,
     }

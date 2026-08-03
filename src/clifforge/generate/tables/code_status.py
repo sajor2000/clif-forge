@@ -7,7 +7,7 @@ spine marks as **expired**, a de-escalation to ``DNR/DNI`` and often ``AND``
 death — the R12 coupling to the terminal outcome. Survivors overwhelmingly stay
 ``Full``. Start times are strictly ordered per patient.
 
-When the pack carries a fitted ``code_status`` block (MIMIC all-28 packs),
+When the pack carries a fitted ``code_status`` block (reference all-28 packs),
 de-escalation rates are read from ``params``; otherwise documented priors apply
 (R15). The spine is the only cross-table channel (KTD-6); output is reproducible
 byte-for-byte under a fixed ``rng`` (R22).

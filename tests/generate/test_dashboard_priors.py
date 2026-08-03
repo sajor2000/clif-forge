@@ -1,4 +1,4 @@
-"""Dashboard-prior wiring for MIMIC-absent tables."""
+"""Dashboard-prior wiring for source-absent tables."""
 
 from __future__ import annotations
 

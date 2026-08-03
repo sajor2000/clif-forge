@@ -179,7 +179,7 @@ def _device_phenotype(
 
     ``l2_niv`` is the stay-level NIV assignment (HFNC/NIPPV/None). Typed
     phenotypes only put HFNC/NIPPV on L2 when the stay is gated onto NIV — so
-    MIMIC stay prevalences hold while escalation *shape* stays clinical.
+    reference stay prevalences hold while escalation *shape* stays clinical.
     """
     if phenotype == "type1":
         if level >= IMV_MIN_SUPPORT_LEVEL:
@@ -208,7 +208,7 @@ def _phenotype_l2_niv(
     p_nippv: float,
     p_hfnc: float,
 ) -> str | None:
-    """Stay-level NIV draw: MIMIC any-NIV rate, phenotype picks HFNC vs NIPPV."""
+    """Stay-level NIV draw: reference any-NIV rate, phenotype picks HFNC vs NIPPV."""
     p_any = p_nippv + p_hfnc
     r = float(rng.random())
     on_niv = r < p_any
@@ -234,7 +234,7 @@ def _set_values(
     """In-bounds settings; prefer fitted quantile edges when the pack carries them."""
 
     def _draw(field: str, lo: float, hi: float, ndigits: int) -> float:
-        # Always clamp to consortium outlier bounds so MIMIC quantile edges that
+        # Always clamp to consortium outlier bounds so source quantile edges that
         # contain charting errors cannot emit non-conformant set values.
         try:
             blo, bhi = bounds("respiratory_support", field)
@@ -369,7 +369,7 @@ def sample_respiratory_support(
         )
     niv = _NIV_DEVICES[int(rng.integers(len(_NIV_DEVICES)))] if enrich else "High Flow NC"
 
-    # Stay-level NIV gate (MIMIC ~6–7% each). Phenotype chooses *which* NIV
+    # Stay-level NIV gate (reference ~6–7% each). Phenotype chooses *which* NIV
     # device when the stay is on the NIV path — not whether every L2 interval
     # gets NIV (that overshot stay rates 5×).
     niv_target = params.get("niv")

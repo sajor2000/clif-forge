@@ -6,7 +6,7 @@ population** — not just the ICU. Where `../sample_dataset/` is an ICU cohort
 sees, with realistic patient flow.
 
 - **5,000 encounters**, all 28 canonical CLIF 2.1 tables + `_truth.parquet`.
-- Built from **`mimic_all28`** (MIMIC-fitted clinical tables) through the validated
+- Built from **`icu_all28`** (fitted clinical tables) through the validated
   **`recalibrate_to_full_hospital`** path (coupled `admission_route_marginal` →
   ADT front door + ward-dominant peak acuity).
 
@@ -18,6 +18,6 @@ sees, with realistic patient flow.
 ```bash
 uv run clif-forge generate \
     --spec sample_full_hospital/spec.toml \
-    --base-pack data/param_packs/mimic_all28 \
+    --base-pack data/param_packs/icu_all28 \
     --n-patients 5000 --seed 42 --out ./reproduced
 ```
