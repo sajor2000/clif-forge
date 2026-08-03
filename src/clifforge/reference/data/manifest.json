@@ -66,9 +66,6 @@
     "patient_assessments": {
       "assessment_category": "mcide/patient_assessments/clif_patient_assessment_categories.csv"
     },
-    "patient_procedures": {
-      "procedure_code_format": "mcide/patient_procedures/clif_patient_procedure_codes.csv"
-    },
     "position": {
       "position_category": "mcide/position/clif_position_categories.csv"
     },
@@ -79,6 +76,9 @@
     "vitals": {
       "vital_category": "mcide/vitals/clif_vitals_categories.csv"
     }
+  },
+  "code_lists": {
+    "patient_procedures": "mcide/patient_procedures/clif_patient_procedure_codes.csv"
   },
   "outliers": {
     "crrt_therapy": "outliers/outlier_thresholds_crrt_modes.csv",

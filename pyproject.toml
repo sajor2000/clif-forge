@@ -39,6 +39,10 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.0",
     "clifpy>=0.5",
+    # Reads clifpy's schemas/2.1/*.yaml to cross-check our canonical-DDL vendoring
+    # against the consortium's other canonical artifact (see
+    # tests/schemas/test_canonical_sources.py).
+    "pyyaml>=6.0",
 ]
 # Cohort Designer web app (`clif-forge ui`). Permissive: Apache-2.0 / BSD / MIT.
 ui = [

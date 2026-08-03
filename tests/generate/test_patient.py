@@ -59,11 +59,13 @@ def test_all_categories_are_exact_mcide_members() -> None:
     race_ok = set(categories("patient", "race_category"))
     eth_ok = set(categories("patient", "ethnicity_category"))
     sex_ok = set(categories("patient", "sex_category"))
+    lang_ok = set(categories("patient", "language_category"))
     for _ in range(500):
         r = sample_patient(pack, rng)
         assert r.race_category in race_ok
         assert r.ethnicity_category in eth_ok
         assert r.sex_category in sex_ok
+        assert r.language_category in lang_ok
 
 
 def test_names_echo_categories() -> None:
@@ -74,6 +76,18 @@ def test_names_echo_categories() -> None:
         assert r.race_name == r.race_category
         assert r.ethnicity_name == r.ethnicity_category
         assert r.sex_name == r.sex_category
+        assert r.language_name == r.language_category
+
+
+def test_language_prior_is_english_skewed_not_uniform() -> None:
+    """Uniform over ~45 languages would put English at ~2% — worse than omitting."""
+    pack = _patient_pack()
+    rng = np.random.default_rng(0)
+    n = 2000
+    english = sum(
+        1 for _ in range(n) if sample_patient(pack, rng).language_category == "English"
+    )
+    assert english / n > 0.7
 
 
 def test_category_marginals_match_pack() -> None:
@@ -107,6 +121,8 @@ def test_empty_frame_has_correct_schema() -> None:
         "ethnicity_name",
         "sex_category",
         "sex_name",
+        "language_category",
+        "language_name",
     ]
     assert all(dt == pl.String for dt in frame.dtypes)
 

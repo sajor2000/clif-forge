@@ -23,11 +23,27 @@ _TRACH_N = 72  # must match _TRACH_MIN_IMV_INTERVALS
 # DEVICE_SET_FIELDS so a wrong entry there is caught rather than tautologically
 # confirmed. Covers every device the generator can actually emit.
 _R10_EXPECTED_SET_FIELDS = {
-    "IMV": {"fio2_set", "tidal_volume_set", "resp_rate_set"},
+    "IMV": {"fio2_set", "tidal_volume_set", "resp_rate_set", "flow_rate_set"},
     "High Flow NC": {"fio2_set", "lpm_set"},
     "Nasal Cannula": {"lpm_set"},
     "Room Air": set(),
     "Trach Collar": set(),
+}
+
+_R10_IMV_BY_MODE = {
+    "Assist Control-Volume Control": {
+        "fio2_set",
+        "tidal_volume_set",
+        "resp_rate_set",
+        "flow_rate_set",
+    },
+    "Pressure Control": {
+        "fio2_set",
+        "resp_rate_set",
+        "peep_set",
+        "pressure_control_set",
+        "inspiratory_time_set",
+    },
 }
 
 
@@ -68,11 +84,15 @@ def test_each_device_populates_exactly_its_matrix_fields() -> None:
         for row in sample_respiratory_support(
             _spine(levels, hid=hid), pack, np.random.default_rng(0)
         ):
-            assert set(row.set_values) == _R10_EXPECTED_SET_FIELDS[row.device_category]
+            if row.device_category == "IMV":
+                assert row.mode_category in _R10_IMV_BY_MODE
+                assert set(row.set_values) == _R10_IMV_BY_MODE[row.mode_category]
+            else:
+                assert set(row.set_values) == _R10_EXPECTED_SET_FIELDS[row.device_category]
             seen.add(row.device_category)
-    # The generator's own matrix must agree with the independent expectation for
-    # every device it can emit (guards DEVICE_SET_FIELDS against silent drift).
     for device in seen:
+        if device == "IMV":
+            continue
         assert set(DEVICE_SET_FIELDS[device]) == _R10_EXPECTED_SET_FIELDS[device]
     assert {"Room Air", "Nasal Cannula", "High Flow NC", "IMV", "Trach Collar"} <= seen
 
@@ -134,6 +154,43 @@ def test_categories_are_exact_mcide_members() -> None:
         assert r.device_category in dev_ok
         if r.mode_category is not None:
             assert r.mode_category in mode_ok
+
+
+def test_imv_emits_obs_within_bounds_and_others_do_not() -> None:
+    pack = _pack()
+    rows = sample_respiratory_support(
+        _spine([0, 1, 3, 3, 1], hid="Hobs"), pack, np.random.default_rng(0)
+    )
+    assert any(r.device_category == "IMV" and r.obs_values for r in rows)
+    for r in rows:
+        if r.device_category == "IMV":
+            assert set(r.obs_values) == {
+                "tidal_volume_obs",
+                "resp_rate_obs",
+                "plateau_pressure_obs",
+                "peak_inspiratory_pressure_obs",
+                "peep_obs",
+                "minute_vent_obs",
+                "mean_airway_pressure_obs",
+            }
+            for field, value in r.obs_values.items():
+                lo, hi = bounds("respiratory_support", field)
+                assert lo <= value <= hi
+        else:
+            assert r.obs_values == {}
+
+
+def test_frame_carries_device_and_mode_names() -> None:
+    pack = _pack()
+    rows = sample_respiratory_support(
+        _spine([0, 1, 2, 3], hid="Hn"), pack, np.random.default_rng(0)
+    )
+    frame = respiratory_support_frame(rows)
+    assert "device_name" in frame.columns and "mode_name" in frame.columns
+    assert frame["device_name"].null_count() == 0
+    imv = frame.filter(pl.col("device_category") == "IMV")
+    if imv.height:
+        assert imv["tidal_volume_obs"].null_count() == 0
 
 
 def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:

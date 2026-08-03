@@ -188,6 +188,7 @@ def test_truth_frame_stacks_spines() -> None:
         "neuro_flag",
         "outcome",
         "admission_route",
+        "resp_phenotype",
     }
     assert truth_frame([]).height == 0
 
@@ -248,5 +249,11 @@ def test_missing_spine_block_raises() -> None:
 
 
 def test_module_exports() -> None:
-    assert set(spine.__all__) == {"FLAG_NAMES", "SpineFrame", "sample_spine", "truth_frame"}
+    assert set(spine.__all__) == {
+        "FLAG_NAMES",
+        "RESP_PHENOTYPES",
+        "SpineFrame",
+        "sample_spine",
+        "truth_frame",
+    }
     assert isinstance(pl.DataFrame, type)

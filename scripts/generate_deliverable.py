@@ -2,7 +2,7 @@
 
 Runs the end-to-end chain — fitted base pack -> population derivation ->
 network-median recalibration -> chunked generation -> streaming concat — and
-writes one ``clif_<table>.parquet`` per table. Chunking keeps peak memory bounded
+writes one ``clif_<table>_2.1_<maturity>.parquet`` per table. Chunking keeps peak memory bounded
 for cohorts of ~100M+ rows.
 
 With no rate/demographic flags it reproduces the **base** dataset (the shared,
@@ -49,7 +49,8 @@ from pathlib import Path
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate.orchestrator import generate_dataset
+from clifforge.generate.filenames import is_deliverable_table, table_parquet_filename
+from clifforge.generate.orchestrator import TRUTH_FILENAME, generate_dataset
 from clifforge.generate.populations import (
     CHICAGO_ETHNICITY_TARGET,
     derive_chicago_population,
@@ -158,20 +159,22 @@ def main(argv: list[str] | None = None) -> int:
         size = min(chunk, args.n - c * chunk)
         ds = generate_dataset(pack, n_patients=size, seed=BASE_SEED + c, id_offset=c * chunk)
         for name, frame in ds.tables.items():
+            if not is_deliverable_table(name):
+                continue
             (parts / name).mkdir(exist_ok=True)
             frame.write_parquet(parts / name / f"chunk_{c:03d}.parquet")
         (parts / "truth").mkdir(exist_ok=True)
         ds.truth.write_parquet(parts / "truth" / f"chunk_{c:03d}.parquet")
-        table_names = list(ds.tables.keys())
+        table_names = [n for n in ds.tables if is_deliverable_table(n)]
         print(f"chunk {c + 1}/{n_chunks} ({min((c + 1) * chunk, args.n):,}/{args.n:,})", flush=True)
 
     total = 0
     for name in [*table_names, "truth"]:
-        dst = out / f"clif_{name}.parquet"
+        dst = out / (TRUTH_FILENAME if name == "truth" else table_parquet_filename(name))
         pl.scan_parquet(str(parts / name / "*.parquet")).sink_parquet(dst)
         rows = pl.scan_parquet(dst).select(pl.len()).collect().item()
         total += rows
-        print(f"  clif_{name:28s} {rows:>12,} rows", flush=True)
+        print(f"  {dst.stem:33s} {rows:>12,} rows", flush=True)
     shutil.rmtree(parts)
     print(f"\nDONE -> {out}  |  {args.n:,} encounters | {total:,} rows", flush=True)
     return 0

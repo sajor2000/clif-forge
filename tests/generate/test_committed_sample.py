@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from clifforge.fit.param_pack import ParamPack
+from clifforge.generate.filenames import is_deliverable_table, table_parquet_path
 from clifforge.generate.orchestrator import generate_dataset
 from clifforge.variants import load_spec, spec_to_pack
 
@@ -16,51 +17,89 @@ _FULL_SAMPLE = Path("sample_full_hospital")
 _BASE = Path("base_pack")
 
 pytestmark = pytest.mark.skipif(
-    not (_SAMPLE / "clif_hospitalization.parquet").exists() or not _BASE.exists(),
-    reason="requires the committed sample and base pack",
+    not table_parquet_path(_SAMPLE, "hospitalization").exists(),
+    reason="requires the committed sample",
 )
+
+
+#: Encounters compared. ``SeedSequence(seed).spawn`` assigns each encounter a
+#: stable key regardless of how many are generated, so regenerating the first 30
+#: must reproduce the committed sample's first 30 exactly.
+_N = 30
+
+
+def _recipe_base_pack(sample_dir: Path) -> Path | None:
+    """Resolve the pack the sample was generated from, or None if it is unavailable.
+
+    Committed samples may point at a local fitted pack under ``data/param_packs/``
+    (gitignored). CI and fresh clones only have ``base_pack/``, so the
+    byte-for-byte recipe check is skip-friendly when that pack is absent.
+    """
+    spec = load_spec(sample_dir / "spec.toml")
+    base_path = Path(spec.base_pack) if spec.base_pack else _BASE
+    if not (base_path / "manifest.json").is_file():
+        return None
+    return base_path
+
+
+def _compare(sample_dir: Path, base_path: Path) -> None:
+    """Assert every deliverable table of the committed sample reproduces from its recipe.
+
+    Checking *every* deliverable table matters: an earlier version of this test
+    compared only ``hospitalization``, so it kept passing while nine tables were
+    added and five others changed shape underneath it. Untiered tables are
+    generated in memory but omitted from deliverable parquet.
+    """
+    spec = load_spec(sample_dir / "spec.toml")
+    pack = spec_to_pack(spec, ParamPack.load(str(base_path)))
+    regenerated = generate_dataset(pack, n_patients=_N, seed=spec.seed).tables
+
+    compared = 0
+    for table, regen in regenerated.items():
+        if not is_deliverable_table(table):
+            continue
+        path = table_parquet_path(sample_dir, table)
+        assert path.exists(), f"{sample_dir}/{path.name} is missing — regenerate the sample"
+
+        # Slice the committed dataset down to the same encounters. The ids are read
+        # off the regenerated frame rather than assumed, because patient and
+        # hospitalization ids are numbered from different offsets. Tables keyed on
+        # neither id (microbiology_susceptibility joins on organism_id alone) are
+        # covered transitively by the parent whose ids they carry.
+        key = next((c for c in ("hospitalization_id", "patient_id") if c in regen.columns), None)
+        if key is None:
+            continue
+        ids = regen[key].unique().to_list()
+        if not ids:
+            continue  # table is empty at n=30; nothing to compare against
+        committed = pl.read_parquet(path).filter(pl.col(key).is_in(ids))
+
+        assert regen.columns == committed.columns, (
+            f"{table}: committed sample has columns {committed.columns}, "
+            f"generator now produces {regen.columns} — regenerate the sample"
+        )
+        order = regen.columns
+        assert regen.sort(order).equals(committed.sort(order)), (
+            f"{table} does not reproduce from its recipe — regenerate the sample"
+        )
+        compared += 1
+    assert compared > 20, f"only {compared} tables compared; expected the deliverable set"
 
 
 def test_committed_sample_reproduces_from_its_recipe() -> None:
-    # Rebuild the exact pack from the committed spec + base pack, then regenerate the
-    # first encounters with the recorded seed. SeedSequence(seed).spawn assigns each
-    # encounter a stable key, so H0..H29 must match the committed sample's first 30 —
-    # proving the whole dataset is reproducible from spec + base pack + seed.
-    spec = load_spec(_SAMPLE / "spec.toml")
-    pack = spec_to_pack(spec, ParamPack.load(str(_BASE)))
-    regen = (
-        generate_dataset(pack, n_patients=30, seed=42)
-        .tables["hospitalization"]
-        .sort("hospitalization_id")
-    )
-    ids = list(range(1, 31))  # 1-based int hospitalization ids
-    committed = (
-        pl.read_parquet(_SAMPLE / "clif_hospitalization.parquet")
-        .filter(pl.col("hospitalization_id").is_in(ids))
-        .sort("hospitalization_id")
-    )
-    assert regen.equals(committed)
+    base_path = _recipe_base_pack(_SAMPLE)
+    if base_path is None:
+        pytest.skip("sample recipe pack not present (local fitted pack)")
+    _compare(_SAMPLE, base_path)
 
 
 @pytest.mark.skipif(
-    not (_FULL_SAMPLE / "clif_hospitalization.parquet").exists(),
+    not table_parquet_path(_FULL_SAMPLE, "hospitalization").exists(),
     reason="requires the committed full-hospital sample",
 )
 def test_committed_full_hospital_sample_reproduces_from_its_recipe() -> None:
-    # Same reproducibility contract as the ICU sample, but through the
-    # ``mode = "full_hospital"`` spec path: regenerating the first 30 encounters from the committed
-    # base pack + spec + seed must match the committed full-hospital sample.
-    spec = load_spec(_FULL_SAMPLE / "spec.toml")
-    pack = spec_to_pack(spec, ParamPack.load(str(_BASE)))
-    regen = (
-        generate_dataset(pack, n_patients=30, seed=42)
-        .tables["hospitalization"]
-        .sort("hospitalization_id")
-    )
-    ids = list(range(1, 31))  # 1-based int hospitalization ids
-    committed = (
-        pl.read_parquet(_FULL_SAMPLE / "clif_hospitalization.parquet")
-        .filter(pl.col("hospitalization_id").is_in(ids))
-        .sort("hospitalization_id")
-    )
-    assert regen.equals(committed)
+    """Same contract as the ICU sample, through the ``mode = "full_hospital"`` spec path."""
+    base_path = _recipe_base_pack(_FULL_SAMPLE)
+    if base_path is None:
+        pytest.skip("sample recipe pack not present (local fitted pack)")
+    _compare(_FULL_SAMPLE, base_path)

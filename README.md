@@ -37,7 +37,7 @@ record leaves the fit stage; no synthetic record traces back to a real patient).
 - [Evaluation](#evaluation) — utility, privacy, fidelity
 - [Repository layout](#repository-layout) — what's in each folder
 - [CLIF versions & roadmap](#clif-versions--roadmap) — 2.1 today, built for 3.0+
-- [Status](#status) · [Provenance & licensing](#provenance--licensing)
+- [Status](#status) · [Provenance & licensing](#provenance--licensing) · [`PROVENANCE.md`](PROVENANCE.md) (table catalog)
 
 ## Two ways to use it
 
@@ -82,9 +82,10 @@ printf 'name = "my-hospital"\nmode = "full_hospital"\n' > hospital.toml
 clif-forge generate --spec hospital.toml --n-patients 20000 --out ./my-hospital
 ```
 
-Output is one `clif_<table>.parquet` per CLIF 2.1 table — load it with your usual
-CLIF tooling. Tune any of the [rules](#each-modes-default-rules--and-how-to-change-them)
-(size, demographics, illness rates, population shape) via a TOML spec.
+Output is one `clif_<table>_2.1_<beta|concept>.parquet` per CLIF 2.1 table — load
+it with your usual CLIF tooling. Tune any of the
+[rules](#each-modes-default-rules--and-how-to-change-them) (size, demographics,
+illness rates, population shape) via a TOML spec.
 
 **Not sure what to type?** Two commands make the terminal path self-explanatory:
 
@@ -183,9 +184,13 @@ A single `--seed` reproduces byte-identical output. Every table is run through
 the conformance gate before anything is written; any validation failure exits
 nonzero and writes nothing.
 
-Output is one `clif_<table>.parquet` per table, plus `clif_truth.parquet` — the
+Output is one `clif_<table>_2.1_<maturity>.parquet` per CLIF table — `beta` or
+`concept` from that table's CLIF maturity badge — plus `_truth.parquet`, the
 latent acuity spine behind each encounter, which makes the dataset usable as a
-benchmark with free ground-truth labels.
+benchmark with free ground-truth labels. The spine is **not** a CLIF table and
+deliberately does not carry the `clif_` prefix: every `clif_*.parquet` in an output
+directory is a real CLIF 2.1 table, so `glob("clif_*.parquet")` is a safe way to
+load the dataset without picking up generator internals.
 
 **The id-type rule (hardcoded, applied to every dataset):** `patient_id`,
 `hospitalization_id`, and `hospitalization_joined_id` are always emitted as
@@ -228,14 +233,19 @@ ICU cohort is ~13 KB/encounter, the whole-hospital population ~3.5 KB/encounter.
 
 Everything below is **fully synthetic, CLIF 2.1-conformant, and committed to the
 repo** — clone and inspect, no generation and no credential required. All of it
-is regenerable byte-for-byte from the committed `base_pack/` + recipe.
+is regenerable byte-for-byte from the committed pack + recipe (see each sample's
+`README.md` / `spec.toml`).
 
 | Location | Size | What it is |
 |---|---|---|
-| [`sample_dataset/`](sample_dataset/) | ~10k stays, ~123 MB | **ICU cohort** sample — a representative draw of the network-median ICU master |
-| [`sample_full_hospital/`](sample_full_hospital/) | ~8k stays, ~28 MB | **Whole-hospital population** sample — ward/ED/stepdown/ICU with realistic patient flow |
-| [`demo_output/`](demo_output/) | n=100 | Tiny hand-specified demo (19 tables) with a generated `REPORT.md` + `PROVENANCE.md` |
-| [`base_pack/`](base_pack/) | ~84 KB | The **aggregate parameter pack** — no real data, seeds every dataset above and any you generate |
+| [`sample_dataset/`](sample_dataset/) | ~5k stays | **ICU cohort** from `icu_all28` + `recalibrate_fitted_icu` (under GitHub's 50 MB/file soft limit) |
+| [`sample_full_hospital/`](sample_full_hospital/) | ~5k stays | **Whole-hospital** mix from `icu_all28` + `recalibrate_to_full_hospital` |
+| [`demo_output/`](demo_output/) | n=100 | Tiny demo (all 28 CLIF 2.1 tables) with a generated `REPORT.md` |
+| [`base_pack/`](base_pack/) | ~84 KB | Shareable **aggregate** pack — no real data; seeds presets / network-median generation |
+| [`data/param_packs/icu_all28`](data/param_packs/icu_all28/) | local fit | source CLIF extract parameter pack used by the committed samples |
+
+Per-table provenance (fitted vs prior vs derived) is catalogued in
+[`PROVENANCE.md`](PROVENANCE.md).
 
 Each dataset carries a `manifest.json` recording the recipe, seed, generator
 version, and per-table SHA-256 content hashes.
@@ -247,18 +257,17 @@ whole-hospital population** — are too large to commit here. Download them dire
 > [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0)
 > — each dataset folder includes a `CONTENTS.json` (per-table row counts + SHA-256) for post-download integrity checks.
 
-They are also reproducible from `base_pack/` on demand (see below), so the shared
+They are also reproducible from a fitted pack on demand (see below), so the shared
 files and a local regeneration match by content hash.
 
-**How the shipped data was generated.** The committed samples and the reference
-masters were produced by `scripts/generate_deliverable.py` from the aggregate
-`base_pack/` (fitted once to real CLIF; no real data is present at generation) on
-a **Mac Studio (Apple M4 Max, 64 GB unified memory), Python 3.12, polars**. A 365k
-whole-hospital population took ~25 minutes; the committed samples reproduce
-byte-for-byte on any machine (see [System requirements](#system-requirements)).
-The **method** is empirical-fidelity fit-then-sample — see
-[How it stays synthetic](#how-it-stays-synthetic) and
-[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) for the full pipeline.
+**How the shipped samples were generated.** The committed ICU and full-hospital
+samples use `data/param_packs/icu_all28` through the validated recalibrate paths
+(`mode = "fitted_icu"` / `"full_hospital"` in each `spec.toml`). Presets and ad-hoc
+recipes without that pack still generate from [`base_pack/`](base_pack/) via
+`recalibrate_to_network_median`. The **method** is empirical-fidelity
+fit-then-sample — see [How it stays synthetic](#how-it-stays-synthetic),
+[`PROVENANCE.md`](PROVENANCE.md), and
+[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
 ## Ideate your own CLIF-like dataset
 
@@ -438,13 +447,15 @@ Pages at **https://sajor2000.github.io/clif-forge/** (source: [`site/`](site/)).
 |---|---|
 | [`src/clifforge/`](src/clifforge) | The package — `fit`, `generate`, `conformance`, `eval`, the `ui` Cohort Designer, and the CLI |
 | [`base_pack/`](base_pack) | The shareable aggregate parameter pack (no real data) that seeds every dataset — with `PROVENANCE.md` + `manifest.json` |
-| [`sample_dataset/`](sample_dataset) | Committed ICU sample (~10k encounters) — its own `README.md` + `manifest.json` + `spec.toml` |
-| [`sample_full_hospital/`](sample_full_hospital) | Committed whole-hospital sample (~8k) — same layout |
-| [`demo_output/`](demo_output) | Tiny hand-specified demo (n=100) with a generated `REPORT.md` + `PROVENANCE.md` |
+| [`sample_dataset/`](sample_dataset) | Committed ICU sample (~5k encounters) — its own `README.md` + `manifest.json` + `spec.toml` |
+| [`sample_full_hospital/`](sample_full_hospital) | Committed whole-hospital sample (~5k) — same layout |
+| [`demo_output/`](demo_output) | Tiny hand-specified demo (n=100) with a generated `REPORT.md` |
+| [`data/param_packs/`](data/param_packs) | Fitted packs (e.g. `icu_all28`) used by committed samples |
 | [`presets/`](presets) | Shipped example recipes (`high-acuity`, `older-cohort`, `sepsis-heavy`) — see [`presets/README.md`](presets/README.md) |
 | [`scripts/`](scripts) | Deliverable generation, base-pack build, synthetic-vs-real validation, release gate |
 | [`site/`](site) | The landing page + validation report (published to GitHub Pages) |
 | [`docs/`](docs) | Reproducibility, the consortium announcement, and design plans — see [`docs/README.md`](docs/README.md) |
+| [`PROVENANCE.md`](PROVENANCE.md) | Per-table catalog: fitted / prior / derived + fitted ICU realism notes |
 | [`tests/`](tests) | Test suite (conformance, fit, generate, eval, CLI) |
 
 Every committed dataset carries a `manifest.json` (recipe, seed, per-table content
@@ -453,18 +464,22 @@ hashes), so it is reproducible from its recipe and any two datasets are provably
 ## Status
 
 The fit and generate stages, both population modes (ICU cohort and whole-hospital),
-and all three evaluation surfaces are implemented; all 19 tables generate and pass
-conformance. The fit stage requires a staged real CLIF set and is **not** part of
-the public distribution — generation needs only the committed `base_pack/`. See
-`docs/REPRODUCIBILITY.md` for the full pipeline and `docs/plans/` for the design.
+and all three evaluation surfaces are implemented; all **28 tables defined by the
+canonical CLIF 2.1 DDL** generate and pass conformance. Committed samples use the
+**`icu_all28`** pack through **`recalibrate_fitted_icu`** /
+**`recalibrate_to_full_hospital`**. Presets and credential-free generation still
+run from the shareable [`base_pack/`](base_pack/). Per-table provenance and the
+The fitted ICU realism changelog live in [`PROVENANCE.md`](PROVENANCE.md). See
+`docs/REPRODUCIBILITY.md` for the full pipeline and `docs/plans/` for design
+history.
 
 ## Provenance & licensing
 
 CLIFForge learns *how a realistic CLIF table is shaped* from aggregate,
 non-derivable statistics. That learned-parameter provenance — including the
-real CLIF citation and the exact mCIDE snapshot — is documented in
-`PROVENANCE.md` at the technical/methods level. All runtime dependencies are
-permissive (MIT / BSD / Apache-2.0).
+real CLIF citation, pack path (`base_pack` vs `icu_all28`), and per-table
+class — is documented in [`PROVENANCE.md`](PROVENANCE.md). All runtime
+dependencies are permissive (MIT / BSD / Apache-2.0).
 
 ### Release gate
 

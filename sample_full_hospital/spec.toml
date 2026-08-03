@@ -1,5 +1,7 @@
-# Full-hospital-population sample: ward/ED/stepdown/ICU mix with realistic patient
-# flow (ER/OR-dominant arrivals, ~20% direct admissions, <10% ICU transfers).
-# Reproduces at n=8000, seed=42.
-name = "full-hospital-sample"
+# Full-hospital sample: reference clinical tables + validated ward/ED/ICU mix
+
+name = "fitted-full-hospital-sample"
+n = 5000
+seed = 42
+base_pack = "data/param_packs/icu_all28"
 mode = "full_hospital"

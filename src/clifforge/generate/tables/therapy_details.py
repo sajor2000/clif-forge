@@ -1,12 +1,16 @@
 """Tier 6 ``therapy_details`` generator (U20; prior-driven, R14, KTD-6).
 
 Rehab therapy detail rows accompany the mobilization ordered for a subset of ICU
-stays. There is no fitted block and the vendored 2.1.0 dictionary leaves the
-element columns free text (no mCIDE list), so documented PT/OT session elements
-are used (R15 — prior-driven, marked in ``PROVENANCE.md``). ``session_start_dttm``
-is a string column per the dictionary, emitted as an ISO-8601 UTC timestamp. The
-spine supplies only the stay horizon (KTD-6); reproducible under a fixed ``rng``
-(R22).
+stays. There is no fitted block and CLIF 2.1 leaves the element columns free text
+(no mCIDE list), so documented PT/OT session elements are used (R15 —
+prior-driven, marked in ``PROVENANCE.md``). The spine supplies only the stay
+horizon (KTD-6); reproducible under a fixed ``rng`` (R22).
+
+``session_start_dttm`` is a real tz-aware UTC timestamp. It was previously
+emitted as an ISO-8601 *string*, because the CLIF website's prose dictionary
+documents this table without a Data Type column and the schema generator defaulted
+those to string. The canonical DDL types it ``DATETIME``, so the string was an
+artifact of the wrong source, not a property of CLIF.
 """
 
 from __future__ import annotations
@@ -18,12 +22,13 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, grid_step_hours
+from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["TherapyDetailRow", "sample_therapy_details", "therapy_details_frame"]
 
-_REHAB_PROB = 0.5
+_REHAB_PROB = _DASH_RATES["key_icu_orders"]
 _SESSION_INTERVAL_HOURS = 24.0
 #: Documented PT/OT session elements (element_category -> value).
 _SESSION_ELEMENTS: tuple[tuple[str, str], ...] = (
@@ -39,7 +44,7 @@ class TherapyDetailRow:
     """One therapy-session detail element."""
 
     hospitalization_id: str
-    session_start_dttm: str
+    session_start_dttm: datetime
     therapy_element_category: str
     therapy_element_value: str
 
@@ -62,7 +67,7 @@ def sample_therapy_details(
     stride = max(1, round(_SESSION_INTERVAL_HOURS / grid_step))
     rows: list[TherapyDetailRow] = []
     for idx in range(icu_intervals[0], icu_intervals[-1] + 1, stride):
-        session_start = (admit_dttm + timedelta(hours=idx * grid_step)).isoformat()
+        session_start = admit_dttm + timedelta(hours=idx * grid_step)
         for category, value in _SESSION_ELEMENTS:
             rows.append(TherapyDetailRow(hid, session_start, category, value))
     return rows
@@ -80,7 +85,7 @@ def therapy_details_frame(rows: list[TherapyDetailRow]) -> pl.DataFrame:
         },
         schema={
             "hospitalization_id": pl.String,
-            "session_start_dttm": pl.String,
+            "session_start_dttm": UTC_DATETIME,
             "therapy_element_name": pl.String,
             "therapy_element_category": pl.String,
             "therapy_element_value": pl.String,

@@ -15,10 +15,16 @@ from clifforge.schemas import base
 
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
-        "culture_id": base.id_column(),
-        "antibiotic": base.string(),
-        "sensitivity": base.string(),
-        "mic": base.plain_float(),
+        "organism_id": base.id_column(),
+        "antimicrobial_name": base.string(),
+        "antimicrobial_category": base.category(
+            "microbiology_susceptibility", "antimicrobial_category"
+        ),
+        "sensitivity_name": base.string(),
+        "susceptibility_name": base.string(),
+        "susceptibility_category": base.category(
+            "microbiology_susceptibility", "susceptibility_category"
+        ),
     },
     strict=False,
     coerce=False,

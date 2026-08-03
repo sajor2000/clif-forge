@@ -360,21 +360,38 @@ def _blank_flags(n: int) -> dict[str, list[bool]]:
 
 
 def test_comfort_archetype_withdraws_support() -> None:
-    # Withdrawal: acuity is de-escalated near death while organ failure persists.
+    # Withdrawal: device acuity de-escalates; shock/renal only when Bernoulli says so.
     lvl = [4] * 30
     flags = _blank_flags(30)
     _apply_terminal_deterioration(
-        lvl, flags, 24.0, 1.0, np.random.default_rng(0), mix={"comfort": 1.0}
+        lvl,
+        flags,
+        24.0,
+        1.0,
+        np.random.default_rng(0),
+        mix={"comfort": 1.0},
+        imv_prob=1.0,
+        vaso_prob=1.0,
+        renal_prob=1.0,
     )
     assert lvl[-1] < 4  # support withdrawn (acuity falls)
-    assert flags["renal_flag"][-1]  # rising renal markers persist
+    assert lvl[-1] >= 3  # ventilated floor when do_imv
+    assert flags["renal_flag"][-1] and flags["cv_flag"][-1]
 
 
 def test_abrupt_archetype_is_a_short_steep_collapse() -> None:
     lvl = [2] * 30
     flags = _blank_flags(30)
     _apply_terminal_deterioration(
-        lvl, flags, 24.0, 1.0, np.random.default_rng(0), mix={"abrupt": 1.0}
+        lvl,
+        flags,
+        24.0,
+        1.0,
+        np.random.default_rng(0),
+        mix={"abrupt": 1.0},
+        imv_prob=1.0,
+        vaso_prob=1.0,
+        renal_prob=1.0,
     )
     changed = [i for i, v in enumerate(lvl) if v > 2]
     assert changed and min(changed) > 30 - 24  # only a short tail (window // 3) escalated
@@ -385,10 +402,36 @@ def test_prolonged_archetype_ladders_the_organs() -> None:
     lvl = [2] * 30
     flags = _blank_flags(30)
     _apply_terminal_deterioration(
-        lvl, flags, 24.0, 1.0, np.random.default_rng(0), mix={"prolonged": 1.0}
+        lvl,
+        flags,
+        24.0,
+        1.0,
+        np.random.default_rng(0),
+        mix={"prolonged": 1.0},
+        imv_prob=1.0,
+        vaso_prob=1.0,
+        renal_prob=1.0,
     )
     assert flags["resp_flag"][-1] and flags["cv_flag"][-1] and flags["renal_flag"][-1]
     assert max(lvl) >= 4  # laddered escalation tops at high vent (L4), not the ceiling
+
+
+def test_terminal_never_imv_death_can_stay_noninvasive() -> None:
+    lvl = [2] * 30
+    flags = _blank_flags(30)
+    _apply_terminal_deterioration(
+        lvl,
+        flags,
+        24.0,
+        1.0,
+        np.random.default_rng(1),
+        mix={"prolonged": 1.0},
+        imv_prob=0.0,
+        vaso_prob=1.0,
+        renal_prob=0.0,
+    )
+    assert max(lvl) == 2
+    assert not any(flags["resp_flag"])
 
 
 def test_terminal_archetypes_vary_across_stays() -> None:
@@ -402,15 +445,27 @@ def test_terminal_archetypes_vary_across_stays() -> None:
 
 
 def test_aggregate_escalation_dominates_but_not_uniform() -> None:
-    # ~80% (abrupt + prolonged) escalate terminally; ~20% (comfort) do not — so the
-    # aggregate decedent decline is preserved while individual courses vary.
+    # With reference-like invent rates, a substantial but not universal share of
+    # decedents end at high vent — not stereotyped 100%.
     pack = recalibrate_to_network_median(_pack(expired_rate=1.0), terminal_deterioration_hours=24.0)
     n, high = 200, 0
     for s in range(n):
         sp = sample_spine(pack, np.random.default_rng(s), hospitalization_id=f"H{s}")
         if max(sp.support_level[-24:]) >= 4:
             high += 1
-    assert 0.6 < high / n < 0.95
+    assert 0.25 < high / n < 0.95
+
+
+def test_ladder_recouples_cv_and_renal_flags() -> None:
+    from clifforge.generate.spine import _recouple_ladder_organs
+
+    lvl = [2, 3, 4, 5]
+    flags = _blank_flags(4)
+    _recouple_ladder_organs(lvl, flags, np.random.default_rng(0), ladder_cv_prob=1.0)
+    assert flags["cv_flag"] == [False, False, True, True]
+    assert flags["renal_flag"] == [False, False, False, True]
+    # resp stays decoupled — support_level alone drives IMV devices
+    assert flags["resp_flag"] == [False, False, False, False]
 
 
 def test_terminal_deterioration_is_deterministic() -> None:

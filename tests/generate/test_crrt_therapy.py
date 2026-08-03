@@ -50,15 +50,28 @@ def test_is_deterministic() -> None:
     assert a == b
 
 
-def test_crrt_only_during_renal_failure() -> None:
+def test_crrt_only_after_sustained_renal_failure() -> None:
+    """CRRT charting starts only after 12 renal-flag hours (creatinine gate)."""
     pack = _pack()
-    renal = [False, True, True, False, True, False]
+    # 8h renal → still gated off; then more renal → emit only after the threshold.
+    renal = [True] * 8 + [False, False] + [True] * 10
     rows = sample_crrt_therapy(_spine(renal), pack, np.random.default_rng(0))
     admit = datetime(2020, 1, 1, tzinfo=UTC)
     covered = {int((r.recorded_dttm - admit).total_seconds() // 3600) for r in rows}
-    # exactly the renal-flag intervals produce rows
-    assert covered == {i for i, flag in enumerate(renal) if flag}
-    assert len(rows) == sum(renal)
+    expected: set[int] = set()
+    renal_hours = 0.0
+    for i, flag in enumerate(renal):
+        if flag:
+            renal_hours += 1.0
+            if renal_hours >= 12.0:
+                expected.add(i)
+    assert covered == expected
+    assert len(rows) == len(expected)
+
+
+def test_brief_renal_failure_yields_no_crrt() -> None:
+    pack = _pack()
+    assert sample_crrt_therapy(_spine([True] * 8), pack, np.random.default_rng(0)) == []
 
 
 def test_no_renal_failure_yields_no_crrt() -> None:
@@ -69,6 +82,7 @@ def test_no_renal_failure_yields_no_crrt() -> None:
 def test_rates_within_bounds() -> None:
     pack = _pack()
     rows = sample_crrt_therapy(_spine([True] * 40), pack, np.random.default_rng(1))
+    assert rows  # sustained renal must clear the 12h gate
     for r in rows:
         frame_vals = {
             "blood_flow_rate": r.blood_flow_rate,
@@ -85,7 +99,9 @@ def test_rates_within_bounds() -> None:
 def test_mode_is_mcide_member() -> None:
     pack = _pack()
     ok = set(categories("crrt_therapy", "crrt_mode_category"))
-    for r in sample_crrt_therapy(_spine([True] * 5), pack, np.random.default_rng(0)):
+    rows = sample_crrt_therapy(_spine([True] * 20), pack, np.random.default_rng(0))
+    assert rows
+    for r in rows:
         assert r.crrt_mode_category in ok
 
 
@@ -93,8 +109,10 @@ def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:
     pack = _pack()
     rows: list = []
     for i in range(15):
-        renal = [bool((i + t) % 3 == 0) for t in range(12)]
+        # Contiguous renal blocks long enough to clear the 12h sustained gate.
+        renal = [True] * 20
         rows += sample_crrt_therapy(_spine(renal, hid=f"H{i}"), pack, np.random.default_rng(i))
+    assert rows
     frame = crrt_therapy_frame(rows)
     dtype = frame.schema["recorded_dttm"]
     assert isinstance(dtype, pl.Datetime) and dtype.time_zone == "UTC"

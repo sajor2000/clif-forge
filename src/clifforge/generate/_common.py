@@ -15,6 +15,7 @@ from __future__ import annotations
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
+from clifforge.schemas.base import NUMERIC_ID_COLUMNS
 
 __all__ = [
     "ICU_MIN_SUPPORT_LEVEL",
@@ -26,14 +27,13 @@ __all__ = [
     "grid_step_hours",
 ]
 
-#: THE ID-TYPE RULE (hardcoded, single source of truth). The analyst-facing join
-#: keys are emitted as integers so they load as numbers — no leading zeros, no
-#: string coercion — in Python, R, and Stata; every other id column
-#: (``device_id``, ``provider_id``, ``med_order_id``, ``culture_id``,
-#: ``hospital_id``) stays a string. Applied to every generated table (see
-#: :func:`enforce_numeric_ids`) and enforced by the conformance gate
-#: (``schemas.base.numeric_id_column``).
-NUMERIC_ID_COLUMNS = ("patient_id", "hospitalization_id", "hospitalization_joined_id")
+#: THE ID-TYPE RULE (hardcoded, single source of truth — defined in
+#: ``schemas.base`` and re-exported here). The analyst-facing join keys are emitted
+#: as integers so they load as numbers — no leading zeros, no string coercion — in
+#: Python, R, and Stata; every other id column (``device_id``, ``provider_id``,
+#: ``med_order_id``, ``culture_id``, ``hospital_id``) stays a string. Applied to
+#: every generated table (see :func:`enforce_numeric_ids`) and enforced by the
+#: conformance gate (``schemas.base.numeric_id_column``).
 
 #: ``patient_id`` is shifted into this disjoint high range so it never numerically
 #: collides with ``hospitalization_id`` (both derive from the same encounter index).

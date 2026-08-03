@@ -1,7 +1,7 @@
 """Tests for the CLI + U21 orchestrator (R22, R23, R25, AE6).
 
 The scaffold parser tests (U1) plus the end-to-end pipeline: a fully
-self-contained synthetic parameter pack (no real data) drives spine -> 19 tables
+self-contained synthetic parameter pack (no real data) drives spine -> all 28 tables
 -> gate -> parquet, so CI exercises seeded determinism / byte-identical output
 (AE6), CLIF ``--out`` naming (R23), nonzero exit on any validation failure (R25),
 and the ``fit`` subcommand wiring.
@@ -18,12 +18,15 @@ import pytest
 from clifforge.cli import build_parser, main
 from clifforge.conformance.gate import ConformanceError
 from clifforge.fit.param_pack import ParamPack
+from clifforge.generate.filenames import parse_table_from_stem, table_parquet_filename
 from clifforge.generate.orchestrator import (
+    TRUTH_FILENAME,
     GeneratedDataset,
     generate_dataset,
     generate_streaming,
     write_dataset,
 )
+from clifforge.reference import loader
 
 
 # --- U1 scaffold parser tests ------------------------------------------------ #
@@ -62,8 +65,8 @@ def test_generate_demo_works_without_a_pack(tmp_path) -> None:
     out = tmp_path / "demo_out"
     rc = main(["generate", "--n-patients", "8", "--seed", "1", "--demo", "--out", str(out)])
     assert rc == 0
-    assert (out / "clif_hospitalization.parquet").exists()
-    assert (out / "clif_vitals.parquet").exists()
+    assert (out / table_parquet_filename("hospitalization")).exists()
+    assert (out / table_parquet_filename("vitals")).exists()
 
 
 def test_generate_without_pack_or_demo_errors(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -96,7 +99,7 @@ def test_init_writes_a_generatable_recipe(tmp_path, monkeypatch) -> None:
     out = tmp_path / "ds"
     rc = main(["generate", "--spec", str(recipe), "--n-patients", "6", "--out", str(out)])
     assert rc == 0
-    assert (out / "clif_hospitalization.parquet").exists()
+    assert (out / table_parquet_filename("hospitalization")).exists()
 
 
 def test_ui_command_parses_with_default_port() -> None:
@@ -137,11 +140,15 @@ def test_rng_fixture_is_seed_reproducible(rng: np.random.Generator, seed: int) -
 
 
 # --- orchestrator ------------------------------------------------------------ #
-def test_generate_dataset_produces_all_tables(pack: ParamPack) -> None:
+def test_generate_dataset_produces_every_canonical_table(pack: ParamPack) -> None:
+    """Every table the canonical CLIF 2.1 DDL defines must be emitted — no more, no less.
+
+    Asserted against the vendored dictionary rather than a literal count, so
+    adding a table upstream fails here instead of silently going unemitted.
+    """
     ds = generate_dataset(pack, n_patients=12, seed=1)
     assert isinstance(ds, GeneratedDataset)
-    assert len(ds.tables) == 19
-    assert "patient" in ds.tables and "provider" in ds.tables
+    assert set(ds.tables) == set(loader.dictionary_tables())
     assert ds.truth.height > 0
 
 
@@ -197,7 +204,7 @@ def test_streaming_leaves_no_parts_dir(pack: ParamPack, tmp_path) -> None:
     out = tmp_path / "out"
     generate_streaming(pack, out, n_patients=30, seed=1, chunk_size=8)
     assert not (out / "_parts").exists()  # intermediate parts cleaned up
-    assert (out / "clif_hospitalization.parquet").exists()
+    assert (out / table_parquet_filename("hospitalization")).exists()
 
 
 def test_streaming_rejects_bad_chunk_size(pack: ParamPack, tmp_path) -> None:
@@ -228,7 +235,7 @@ def test_cli_large_cohort_streams_and_caps_threads(tmp_path, monkeypatch) -> Non
     )
     assert rc == 0
     assert os.environ["POLARS_MAX_THREADS"] == "2"
-    hosp = pl.read_parquet(out / "clif_hospitalization.parquet")
+    hosp = pl.read_parquet(out / table_parquet_filename("hospitalization"))
     assert hosp["hospitalization_id"].n_unique() == 40  # all encounters written
 
 
@@ -298,11 +305,15 @@ def test_conformance_failure_is_detected(pack: ParamPack) -> None:
 
 
 def test_write_dataset_can_skip_truth(pack: ParamPack, tmp_path) -> None:
+    from clifforge.generate.filenames import deliverable_tables
+
     ds = generate_dataset(pack, n_patients=4, seed=1)
     written = write_dataset(ds, tmp_path, write_truth=False)
-    assert not (tmp_path / "clif_truth.parquet").exists()
-    assert len(written) == 19
+    assert not (tmp_path / "_truth.parquet").exists()
+    assert len(written) == len(deliverable_tables())
     assert all(p.suffix == ".parquet" for p in written)
+    assert all("_2.1_beta.parquet" in p.name or "_2.1_concept.parquet" in p.name for p in written)
+    assert not any("untiered" in p.name for p in written)
 
 
 # --- CLI end-to-end ---------------------------------------------------------- #
@@ -324,11 +335,29 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
         ]
     )
     assert code == 0
-    assert (out / "clif_patient.parquet").exists()
-    assert (out / "clif_hospitalization.parquet").exists()
-    assert (out / "clif_truth.parquet").exists()
+    assert (out / table_parquet_filename("patient")).exists()
+    assert (out / table_parquet_filename("hospitalization")).exists()
+    assert (out / "_truth.parquet").exists()
     written = {p.name for p in out.glob("clif_*.parquet")}
-    assert "clif_vitals.parquet" in written and "clif_provider.parquet" in written
+    assert table_parquet_filename("vitals") in written
+    assert table_parquet_filename("provider") in written
+
+
+def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path) -> None:
+    """Nothing outside the CLIF 2.1.0 dictionary may claim a ``clif_`` filename.
+
+    The latent spine is the standing temptation here — it is generator internals,
+    not a CLIF table, so it ships as ``_truth.parquet``.
+    """
+    write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path)
+    emitted = {parse_table_from_stem(p.stem) for p in tmp_path.glob("clif_*.parquet")}
+    assert None not in emitted
+    assert emitted <= set(loader.dictionary_tables())
+    # Beta and concept tables both appear, under their maturity-tagged stems.
+    stems = {p.stem for p in tmp_path.glob("clif_*.parquet")}
+    assert table_parquet_filename("vitals").removesuffix(".parquet") in stems
+    assert table_parquet_filename("provider").removesuffix(".parquet") in stems
+    assert (tmp_path / TRUTH_FILENAME).exists()
 
 
 def test_cli_ae6_two_runs_byte_identical(pack: ParamPack, tmp_path) -> None:
@@ -355,7 +384,11 @@ def _null_id_wrapper(frame_fn, id_col):
     ("table", "id_col"),
     [
         ("patient", "patient_id"),  # assembled directly by the orchestrator
-        ("provider", "provider_id"),  # assembled via the table registry (last entry)
+        # Nulled on a late registry table so a dropped gate call downstream can't
+        # hide behind patient's own failure. It must be a *backbone* key: canonical
+        # 2.1 leaves provider_id, device_id, med_order_id and friends nullable, so
+        # nulling one of those is valid CLIF and correctly does not trip the gate.
+        ("provider", "hospitalization_id"),
     ],
 )
 def test_cli_generate_nonzero_on_conformance_failure(
@@ -463,7 +496,7 @@ def test_generate_from_spec_writes_dataset_and_manifest(tmp_path, pack: ParamPac
         ]
     )
     assert rc == 0
-    assert (out / "clif_hospitalization.parquet").exists()
+    assert (out / table_parquet_filename("hospitalization")).exists()
     assert (out / "manifest.json").exists()
 
 

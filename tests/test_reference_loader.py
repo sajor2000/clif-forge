@@ -41,6 +41,15 @@ def test_lab_categories_nonempty_and_expected_member() -> None:
     assert all(v.strip() == v and v for v in labs)
 
 
+def test_language_categories_exclude_footnote_rows() -> None:
+    """Upstream language CSV ends with a ``*Descriptions...`` prose row — not a value."""
+    langs = reference.categories("patient", "language_category")
+    assert "English" in langs
+    assert "Unknown or NA" in langs
+    assert all(not v.startswith("*") for v in langs)
+    assert len(langs) == 45
+
+
 def test_vitals_categories_present() -> None:
     vitals = reference.categories("vitals", "vital_category")
     assert "heart_rate" in vitals

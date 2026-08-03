@@ -37,9 +37,14 @@ acuity-agnostic, so this is an explicit coupling, not a fitted mechanism), kept
 to classic renal markers rather than invented broadly (R15). The spine is the
 only cross-table channel (KTD-6); this generator never reads another table.
 
-Un-fitted columns (collect/result timestamps, order/specimen category, LOINC,
-reference unit) are omitted rather than fabricated (R15; the schema is
-permissive). Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
+``reference_unit`` and ``lab_order_category`` come from the vendored mCIDE
+crosswalk on ``lab_category`` (exact consortium pairings). Collect/result times
+follow the same order ≤ collect < result prior as microbiology cultures, with
+shorter chem-panel turnaround. Specimen type and LOINC come from the curated
+``lab_category`` crosswalk (:mod:`clifforge.generate.loinc`) — never invented
+ad-hoc codes.
+
+Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
 """
 
 from __future__ import annotations
@@ -56,8 +61,9 @@ from scipy.special import ndtr, ndtri
 from clifforge.fit.estimators import LAB_QUANTILE_PROBS
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
+from clifforge.generate.loinc import lab_loinc_code, lab_specimen
 from clifforge.generate.spine import SpineFrame
-from clifforge.reference import bounds
+from clifforge.reference import bounds, loader
 
 __all__ = ["LabObservation", "labs_frame", "sample_labs"]
 
@@ -69,14 +75,67 @@ _LAB_PANEL_INTERVAL_HOURS = 24.0
 #: the additive shift in log1p space (~doubles creatinine) — a documented R12
 #: clinical coupling, not a fitted quantity.
 _RENAL_MARKERS = frozenset({"creatinine", "bun"})
-_RENAL_LOG_SHIFT = 0.5
+_RENAL_LOG_SHIFT = 0.75
 #: Value-space equivalent of the log1p-space renal shift, for the empirical-quantile
 #: marginal path (which produces a value directly, not a log1p value): a multiplicative
-#: bump ``exp(_RENAL_LOG_SHIFT)`` (~1.65), so creatinine/bun still rise with renal
-#: failure. This is the ``expm1(log1p(v) + shift)`` coupling approximated as ``v * e^shift``.
+#: bump ``exp(_RENAL_LOG_SHIFT)`` (~2.1), so creatinine/bun still rise with renal
+#: failure and CRRT stays land in the top creat quartile (reference high_creat|CRRT≈0.97).
 _RENAL_VALUE_FACTOR = float(np.exp(_RENAL_LOG_SHIFT))
+#: Progressive renal derangement: consecutive renal-flag hours scale the bump up
+#: toward full strength over ~12h so creat *rises* within a stay (sicker→sicker).
+_RENAL_RAMP_HOURS = 12.0
+
+#: Shock / hypoperfusion markers bumped when ``cv_flag`` is on (lactate rises with
+#: pressors and falling MAP — longitudinal pairing, not a free invention).
+_SHOCK_MARKERS = frozenset({"lactate"})
+_SHOCK_LOG_SHIFT = 0.4
+_SHOCK_VALUE_FACTOR = float(np.exp(_SHOCK_LOG_SHIFT))
+
+#: Collect delay after order (minutes) and result delay after collect (hours) —
+#: documented chem-panel priors, shorter than culture turnaround.
+_COLLECT_DELAY_MINUTES = (5.0, 60.0)
+_RESULT_DELAY_HOURS = (0.5, 6.0)
 
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
+
+
+def _renal_run_hours(
+    renal_flag: list[bool], interval_idx: int, grid_step: float
+) -> float:
+    """Consecutive renal-flag hours ending at ``interval_idx`` (for rising creat)."""
+    run = 0
+    for j in range(interval_idx, -1, -1):
+        if not renal_flag[j]:
+            break
+        run += 1
+    return run * grid_step
+
+
+def _apply_clinical_lab_bumps(
+    lab: str,
+    value: float,
+    *,
+    renal: bool,
+    renal_frac: float,
+    shock: bool,
+    log_space: bool,
+) -> float:
+    """Apply R12 organ-failure bumps; renal ramps with consecutive flag hours."""
+    if renal and lab in _RENAL_MARKERS:
+        strength = 0.35 + 0.65 * min(1.0, renal_frac)
+        if log_space:
+            value += _RENAL_LOG_SHIFT * strength
+        else:
+            value *= 1.0 + (_RENAL_VALUE_FACTOR - 1.0) * strength
+    if shock and lab in _SHOCK_MARKERS:
+        if log_space:
+            value += _SHOCK_LOG_SHIFT
+        else:
+            value *= _SHOCK_VALUE_FACTOR
+    elif lab in _SHOCK_MARKERS and not shock:
+        # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ reference).
+        value = min(value, 3.0) if not log_space else min(value, float(np.log1p(3.0)))
+    return value
 
 
 @dataclass(frozen=True)
@@ -85,6 +144,8 @@ class LabObservation:
 
     hospitalization_id: str
     lab_order_dttm: datetime
+    lab_collect_dttm: datetime
+    lab_result_dttm: datetime
     lab_name: str
     lab_category: str
     lab_value: str
@@ -206,7 +267,17 @@ def sample_labs(
         z = chol @ rng.standard_normal(n)  # (2) correlated latent draw per panel
         jitter = rng.random() * grid_step
         order_dttm = admit_dttm + timedelta(hours=interval_idx * grid_step + jitter)
+        collect_dttm = order_dttm + timedelta(
+            minutes=float(rng.uniform(*_COLLECT_DELAY_MINUTES))
+        )
+        result_dttm = collect_dttm + timedelta(hours=float(rng.uniform(*_RESULT_DELAY_HOURS)))
         renal = spine.renal_flag[interval_idx]
+        shock = spine.cv_flag[interval_idx]
+        renal_frac = (
+            _renal_run_hours(spine.renal_flag, interval_idx, grid_step) / _RENAL_RAMP_HOURS
+            if renal
+            else 0.0
+        )
         for i, lab in enumerate(order):
             if not present_mask[i]:
                 continue
@@ -220,15 +291,22 @@ def sample_labs(
                 # draw counts are identical to the log-normal path.
                 u = float(ndtr(float(z[i])))
                 value = float(np.interp(u, LAB_QUANTILE_PROBS, grid))
-                if renal and lab in _RENAL_MARKERS:
-                    value *= _RENAL_VALUE_FACTOR  # R12 renal coupling (value space)
+                value = _apply_clinical_lab_bumps(
+                    lab, value, renal=renal, renal_frac=renal_frac, shock=shock, log_space=False
+                )
             else:
                 marg = marginals.get(lab)
                 if marg is None:
                     continue
                 log_val = marg["log_mean"] + marg["log_sd"] * float(z[i])
-                if renal and lab in _RENAL_MARKERS:
-                    log_val += _RENAL_LOG_SHIFT  # R12 renal coupling
+                log_val = _apply_clinical_lab_bumps(
+                    lab,
+                    log_val,
+                    renal=renal,
+                    renal_frac=renal_frac,
+                    shock=shock,
+                    log_space=True,
+                )
                 value = float(np.expm1(log_val))
             value = _clamp(value, lab)
             value = round(value, 4)
@@ -236,6 +314,8 @@ def sample_labs(
                 LabObservation(
                     hospitalization_id=hid,
                     lab_order_dttm=order_dttm,
+                    lab_collect_dttm=collect_dttm,
+                    lab_result_dttm=result_dttm,
                     lab_name=lab,
                     lab_category=lab,
                     lab_value=f"{value:g}",
@@ -248,22 +328,51 @@ def sample_labs(
 
 
 def labs_frame(observations: list[LabObservation]) -> pl.DataFrame:
-    """Stack observed labs into one conformant long ``labs`` frame."""
+    """Stack observed labs into one conformant long ``labs`` frame.
+
+    ``reference_unit`` / ``lab_order_category`` / ``lab_order_name`` are filled from
+    the vendored mCIDE companion columns so every emitted category pairing is an
+    exact consortium member (R5).
+    """
+    unit_by_lab = loader.crosswalk("labs", "lab_category", "reference_unit")
+    order_cat_by_lab = loader.crosswalk("labs", "lab_category", "lab_order_category")
+    order_name_by_cat = loader.crosswalk("labs", "lab_order_category", "description")
+
+    order_categories = [order_cat_by_lab[o.lab_category] for o in observations]
+    specimens = [lab_specimen(o.lab_category) for o in observations]
     return pl.DataFrame(
         {
             "hospitalization_id": [o.hospitalization_id for o in observations],
             "lab_order_dttm": [o.lab_order_dttm for o in observations],
+            "lab_collect_dttm": [o.lab_collect_dttm for o in observations],
+            "lab_result_dttm": [o.lab_result_dttm for o in observations],
+            "lab_order_name": [
+                order_name_by_cat.get(cat, cat) or cat for cat in order_categories
+            ],
+            "lab_order_category": order_categories,
             "lab_name": [o.lab_name for o in observations],
             "lab_category": [o.lab_category for o in observations],
             "lab_value": [o.lab_value for o in observations],
             "lab_value_numeric": [o.lab_value_numeric for o in observations],
+            "reference_unit": [unit_by_lab[o.lab_category] for o in observations],
+            "lab_specimen_name": [s[1] for s in specimens],
+            "lab_specimen_category": [s[0] for s in specimens],
+            "lab_loinc_code": [lab_loinc_code(o.lab_category) for o in observations],
         },
         schema={
             "hospitalization_id": pl.String,
             "lab_order_dttm": UTC_DATETIME,
+            "lab_collect_dttm": UTC_DATETIME,
+            "lab_result_dttm": UTC_DATETIME,
+            "lab_order_name": pl.String,
+            "lab_order_category": pl.String,
             "lab_name": pl.String,
             "lab_category": pl.String,
             "lab_value": pl.String,
             "lab_value_numeric": pl.Float64,
+            "reference_unit": pl.String,
+            "lab_specimen_name": pl.String,
+            "lab_specimen_category": pl.String,
+            "lab_loinc_code": pl.String,
         },
     )

@@ -4,7 +4,7 @@ Do not hand-edit the generated column list; regenerate with
 ``uv run python scripts/gen_schemas.py``. A table unit MAY append clinical-coupling
 refinements below SCHEMA via .update_column()/.add_columns() (see U3 / R15).
 
-Table: microbiology_culture (beta)
+Table: microbiology_culture (concept)
 """
 
 from __future__ import annotations
@@ -15,7 +15,9 @@ from clifforge.schemas import base
 
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
+        "patient_id": base.numeric_id_column(),
         "hospitalization_id": base.numeric_id_column(),
+        "organism_id": base.id_column(),
         "order_dttm": base.utc_datetime(),
         "collect_dttm": base.utc_datetime(),
         "result_dttm": base.utc_datetime(),
@@ -23,8 +25,10 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "fluid_category": base.category("microbiology_culture", "fluid_category"),
         "method_name": base.string(),
         "method_category": base.category("microbiology_culture", "method_category"),
+        "organism_name": base.string(),
         "organism_category": base.category("microbiology_culture", "organism_category"),
         "organism_group": base.category("microbiology_culture", "organism_group"),
+        "lab_loinc_code": base.string(),
     },
     strict=False,
     coerce=False,

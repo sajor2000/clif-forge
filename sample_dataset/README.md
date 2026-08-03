@@ -1,40 +1,44 @@
-# Committed synthetic CLIF 2.1 sample (~10,000 encounters)
+# Committed synthetic CLIF 2.1 sample (~5,000 encounters)
 
 A **fully synthetic**, CLIF 2.1–conformant sample committed directly to the repo —
-the largest that stays under GitHub's 100 MB/file limit (vitals ≈ 87 MB). It lets
-you inspect realistic, multi-table output and test code without generating anything
-or holding any credential.
+sized so every file stays under GitHub's **50 MB soft limit** (vitals ≈ 41 MB). It
+lets you inspect realistic, multi-table output and test code without generating
+anything or holding any credential.
 
-- **10,000 ICU encounters**, ~16.4M rows, ~138 MB, 20 parquet files (19 CLIF tables
-  + a synthetic-only `truth` benchmarking table).
-- A representative draw of the shared **master** dataset (same generator, same
-  network-median statistics).
+- **5,000 ICU encounters**, the **25** website-badged beta/concept CLIF 2.1 tables
+  plus `_truth.parquet` (latent spine). Untiered DDL tables are omitted from
+  deliverable parquet.
+- Built from the **`icu_all28`** parameter pack (fit on local source CLIF extract)
+  through the validated **`recalibrate_fitted_icu`** path: spine tempering, LOS
+  sojourns, gated NIV, terminal deterioration, RF phenotypes, and ADT front-door
+  arrivals (`arrival_location_marginal` + `direct_icu_frac`).
+
+**What each table is and how it was produced:** see repo-root
+[`PROVENANCE.md`](../PROVENANCE.md).
 
 ## Guarantees
 
 - **Fully synthetic.** No real patient records; no record maps to a real individual.
 - **100% CLIF 2.1 mCIDE-conformant** — every table passes the schema + vocabulary +
   physiologic-bounds gate; zero orphan rows.
-- **Reproducible byte-for-byte** — regenerate it from the committed base pack, spec,
-  and seed (see below); the `manifest.json` records per-table content hashes.
-- **Realistic** — autocorrelated vitals, realistic length-of-stay and measurement
-  density, and deterioration-toward-death dynamics.
+- **Joins that mean something.** `microbiology_susceptibility` resolves to the
+  isolate its culture grew, and `medication_orders` is in exact correspondence
+  with the administrations given under it.
+- **Reproducible byte-for-byte** — regenerate from the committed pack, spec, and
+  seed (see below).
+- **Empirical rates** — IMV / mortality / NIV / ADT arrivals / diagnosis
+  case-mix track the local reference ICU cohort within the validated envelope.
 
 ## Reproduce it
 
 ```bash
 uv run clif-forge generate \
-    --spec sample_dataset/spec.toml --base-pack base_pack \
-    --n-patients 10000 --seed 42 --out ./reproduced
+    --spec sample_dataset/spec.toml \
+    --base-pack data/param_packs/icu_all28 \
+    --n-patients 5000 --seed 42 --out ./reproduced
 ```
 
-The result matches this directory byte-for-byte (compare `manifest.json` hashes).
+## What's not here
 
-## Files
-
-One `clif_<table>.parquet` per CLIF 2.1 table, plus `clif_truth.parquet`
-(synthetic-only latent labels for benchmarking), `manifest.json` (provenance +
-hashes), and `spec.toml` (the recipe). See `../DATA_DICTIONARY`-style column details
-in the tables themselves.
-
-Not real data — do not use for clinical decisions or epidemiologic conclusions.
+The full-size master (~85k encounters) is not in git. See the repo README for
+how to generate a larger cohort from the same pack.

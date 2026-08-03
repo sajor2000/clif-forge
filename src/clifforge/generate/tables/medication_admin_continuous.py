@@ -39,6 +39,7 @@ from clifforge.generate._common import (
 )
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference import loader
 
 __all__ = [
     "MedAdminRow",
@@ -46,6 +47,7 @@ __all__ = [
     "sample_medication_admin_continuous",
 ]
 
+_TABLE = "medication_admin_continuous"
 _DOSE_UNIT = "mcg/kg/min"
 _ROUTE = "iv"
 #: (med_category, documented rate range) for the two spine-coupled infusions.
@@ -229,13 +231,20 @@ def _fitted_infusions(
     if cv:
         emit(_VASOPRESSOR, cv[int(rng.integers(len(cv)))])
 
+    # Guaranteed sedative for most IMV stays (ICU doctor logic: ventilated →
+    # sedated). Rate defaults to reference P(sedation|IMV)≈0.85 so we pair without
+    # saturating every short/comfort IMV window.
+    sed_imv_prob = float(params.get("sedation_imv_prob", 1.0))
+    if imv and rng.random() < sed_imv_prob:
+        emit(_SEDATIVE, imv[int(rng.integers(len(imv)))])
+
     # Per-interval infusion volume. When a derived pack sets
     # ``vasopressor_per_stay`` the vasopressor classes are removed from this
     # LOS-scaling draw and left entirely to the per-stay cv path above: otherwise
     # a realistic multi-day ICU stay accumulates so many marginal draws that
     # nearly every stay eventually samples a pressor, inflating the vasopressor
-    # *stay*-rate far above its real prevalence. Sedation and other infusions
-    # still scale with stay length (a long ventilated stay genuinely has more).
+    # *stay*-rate far above its real prevalence. ``sedation_per_imv`` does the
+    # same for sedatives — only IMV stays draw them (paired with ventilation).
     draw_marginal = marginal
     if params.get("vasopressor_per_stay"):
         # Confine vasopressor use to cardiovascular-failure stays so the *stay*
@@ -246,15 +255,22 @@ def _fitted_infusions(
         if cv:
             boost = float(params.get("vasopressor_cv_boost", 1.0))
             draw_marginal = {
-                m: (w * boost if m in _VASOPRESSORS else w) for m, w in marginal.items()
+                m: (w * boost if m in _VASOPRESSORS else w) for m, w in draw_marginal.items()
             }
         else:
-            draw_marginal = {m: w for m, w in marginal.items() if m not in _VASOPRESSORS}
-        total = sum(draw_marginal.values())
-        draw_marginal = {m: w / total for m, w in draw_marginal.items()} if total > 0 else marginal
+            draw_marginal = {m: w for m, w in draw_marginal.items() if m not in _VASOPRESSORS}
+    if params.get("sedation_per_imv", True):
+        # Sedatives only via the stay-level IMV Bernoulli above — strip from the
+        # LOS-scaling draw so long IMV stays don't saturate to sedation|IMV=1.0
+        # (reference is ~0.85).
+        draw_marginal = {m: w for m, w in draw_marginal.items() if m not in _SEDATIVES}
+    total = sum(draw_marginal.values())
+    draw_marginal = {m: w / total for m, w in draw_marginal.items()} if total > 0 else marginal
     n = int(rng.poisson(_INFUSIONS_PER_ICU_INTERVAL * len(icu)))
     for _ in range(n):
         med = categorical(draw_marginal, rng)
+        if med in _SEDATIVES and not imv:
+            continue
         emit(med, pick_interval(med))
 
     rows.sort(key=lambda r: (r.admin_dttm, r.med_category, r.mar_action_category))
@@ -286,6 +302,10 @@ def sample_medication_admin_continuous(
 
     vaso_active = list(spine.cv_flag)
     sed_active = [level >= IMV_MIN_SUPPORT_LEVEL for level in spine.support_level]
+    # Optional stay-level Bernoulli (``sedation_imv_prob``); default 1.0 keeps
+    # demo/default packs fully paired. Recalibrate sets ~0.85 to match the reference.
+    if any(sed_active) and rng.random() >= float(params.get("sedation_imv_prob", 1.0)):
+        sed_active = [False] * len(sed_active)
     rows = _infusion_rows(
         hid, _VASOPRESSOR, vaso_active, pack, rng, admit_dttm, grid_step, order_seq
     )
@@ -295,7 +315,15 @@ def sample_medication_admin_continuous(
 
 
 def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
-    """Stack med-admin events into one conformant frame."""
+    """Stack med-admin events into one conformant frame.
+
+    ``med_group`` and ``mar_action_group`` are roll-ups of the categories, read
+    from the same vendored mCIDE files that define the categories themselves
+    rather than restated here — the consortium already publishes both mappings,
+    so deriving them is exact and cannot drift out of sync with the category list.
+    """
+    med_group = loader.crosswalk(_TABLE, "med_category", "med_group")
+    action_group = loader.crosswalk(_TABLE, "mar_action_category", "mar_action_group")
     return pl.DataFrame(
         {
             "hospitalization_id": [r.hospitalization_id for r in rows],
@@ -303,12 +331,14 @@ def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
             "admin_dttm": [r.admin_dttm for r in rows],
             "med_name": [r.med_category for r in rows],
             "med_category": [r.med_category for r in rows],
+            "med_group": [med_group[r.med_category] for r in rows],
             "med_route_name": [r.med_route_category for r in rows],
             "med_route_category": [r.med_route_category for r in rows],
             "med_dose": [r.med_dose for r in rows],
             "med_dose_unit": [r.med_dose_unit for r in rows],
             "mar_action_name": [r.mar_action_category for r in rows],
             "mar_action_category": [r.mar_action_category for r in rows],
+            "mar_action_group": [action_group[r.mar_action_category] for r in rows],
         },
         schema={
             "hospitalization_id": pl.String,
@@ -316,11 +346,13 @@ def medication_admin_continuous_frame(rows: list[MedAdminRow]) -> pl.DataFrame:
             "admin_dttm": UTC_DATETIME,
             "med_name": pl.String,
             "med_category": pl.String,
+            "med_group": pl.String,
             "med_route_name": pl.String,
             "med_route_category": pl.String,
             "med_dose": pl.Float64,
             "med_dose_unit": pl.String,
             "mar_action_name": pl.String,
             "mar_action_category": pl.String,
+            "mar_action_group": pl.String,
         },
     )

@@ -19,6 +19,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "recorded_dttm": base.utc_datetime(),
         "measure_name": base.string(),
         "measure_category": base.category("invasive_hemodynamics", "measure_category"),
+        "measure_value": base.plain_float(),
     },
     strict=False,
     coerce=False,

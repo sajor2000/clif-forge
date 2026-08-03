@@ -1,20 +1,31 @@
-"""Vendor the CLIF 2.1.0 data dictionary as a structured schema map (U3).
+"""Vendor the CLIF 2.1 schema from the consortium's canonical DDL (U3).
 
-The mCIDE CSVs (vendored in U2) define only the *category* fields and numeric
-outlier bounds. The complete per-table column list + data types lives in the
-CLIF website's Quarto data dictionary (`data-dictionary-2.1.0.qmd`). This script
-fetches that file at a pinned commit, parses each ``## Table`` section into a
-``{table -> {maturity, columns:[{name, dtype}]}}`` map, and writes it to
-``src/clifforge/reference/data/dictionary.json`` so ``scripts/gen_schemas.py``
-can build complete pandera schemas fully offline (R24).
+**Source of truth: ``CLIF/ddl/2.1/CLIF2.1_MYSQL_ddl.sql``.** That file is the
+consortium's machine-readable schema — one ``CREATE TABLE`` per CLIF table, with a
+data type and a JSON ``COMMENT`` (description + permissible values) per column, and
+explicit ``FOREIGN KEY`` constraints. It is byte-identical at the pinned ``v2.1.0``
+tag and on ``main``, so pinning costs nothing and buys reproducibility (R24).
 
-Two dictionary quirks are handled:
-- Tables appear as GitHub pipe tables *or* Pandoc grid tables; both encode a row
-  as ``| cell | cell | ...``. Concept-tier tables sometimes omit data types (a
-  ``Description`` column instead of ``Data Type``) — their columns are recorded
-  with an ``unknown`` dtype (the generator defaults them to string).
-- ``medication_admin_intermittent`` documents itself as "the same schema as
-  medication_admin_continuous"; it is recorded as an alias and resolved here.
+This script previously parsed the CLIF website's human-facing Quarto page
+(``data-dictionary-2.1.0.qmd``). That page is prose documentation, not a spec, and
+it had drifted badly from the DDL: it omitted 3 whole tables, dropped 41 columns,
+mistyped 45 more, and gave four tables (``hospital_diagnosis``,
+``microbiology_susceptibility``, ``patient_procedures``, ``microbiology_nonculture``)
+column lists that were wrong rather than merely incomplete — e.g. it keyed
+``hospital_diagnosis`` on ``patient_id`` with a ``DOUBLE`` diagnosis code, where the
+DDL keys it on ``hospitalization_id`` with a ``VARCHAR`` ICD code. Generators built
+on the prose page emitted tables that do not exist in CLIF.
+
+The Quarto page is still fetched, but **only** for per-table maturity badges: the
+canonical repo's ``maturity.md`` tiers the project as a whole and never labels
+individual tables, so the website badge is the only per-table beta/concept signal
+that exists. Column names, types, permissible values, and foreign keys all come
+from the DDL.
+
+``clifpy`` (an installed dependency) ships ``schemas/2.1/*.yaml`` for 18 of the 28
+tables and is the second canonical artifact. It is not merged in here — it is used
+as an independent cross-check in ``tests/schemas/test_canonical_sources.py``, so
+drift between the two canonical sources fails CI instead of passing silently.
 
 Re-run with::
 
@@ -29,176 +40,152 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-REPO = "clif-consortium/website"
-# Commit that last touched data-dictionary-2.1.0.qmd (2025-07-16).
-COMMIT = "888353c0521ac2ce2c380cf2ec94cedaabd36bfe"
+CLIF_REPO = "Common-Longitudinal-ICU-data-Format/CLIF"
+# v2.1.0 release commit; ddl/2.1/CLIF2.1_MYSQL_ddl.sql is identical here and on main.
+CLIF_COMMIT = "966bc5fb0dc0f5664405f833568886ad850d869d"
+DDL_PATH = "ddl/2.1/CLIF2.1_MYSQL_ddl.sql"
+
+WEBSITE_REPO = "clif-consortium/website"
+WEBSITE_COMMIT = "888353c0521ac2ce2c380cf2ec94cedaabd36bfe"
 QMD_PATH = "data-dictionary/data-dictionary-2.1.0.qmd"
+
 CLIF_VERSION = "2.1.0"
-RETRIEVED_AT = "2026-07-23"
+RETRIEVED_AT = "2026-08-01"
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "src" / "clifforge" / "reference" / "data"
 
-KNOWN_DTYPES = {
-    "VARCHAR",
-    "DATETIME",
-    "DOUBLE",
-    "INT",
-    "INTEGER",
-    "FLOAT",
-    "BOOLEAN",
-    "BOOL",
-    "NUMERIC",
-    "BIGINT",
-}
-
-# Dictionary section header -> mCIDE/CLIF canonical table id (only where they differ).
+#: Website section heading -> canonical DDL table name, where they differ.
 TABLE_RENAME = {
     "microbiology_non_culture": "microbiology_nonculture",
     "procedures": "patient_procedures",
     "sensitivity": "microbiology_susceptibility",
 }
 
-
-def _raw_url(path: str) -> str:
-    return f"https://raw.githubusercontent.com/{REPO}/{COMMIT}/{path}"
-
-
-def _fetch_text(path: str) -> str:
-    with urllib.request.urlopen(_raw_url(path), timeout=30) as resp:  # noqa: S310 (pinned host)
-        return resp.read().decode("utf-8")
+#: How far past a ``## Table`` heading to look for that table's maturity badge.
+_BADGE_SCAN_LINES = 6
 
 
-def _norm_table(header: str) -> str:
-    # Drop a `{#anchor}` suffix and bold markers, then snake-case.
-    header = re.sub(r"\{#.*?\}", "", header)
-    header = header.replace("*", "").strip()
-    tid = re.sub(r"[^a-z0-9]+", "_", header.lower()).strip("_")
-    return TABLE_RENAME.get(tid, tid)
+def _fetch(repo: str, commit: str, path: str) -> str:
+    url = f"https://raw.githubusercontent.com/{repo}/{commit}/{path}"
+    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (pinned host)
+        return str(resp.read().decode("utf-8"))
 
 
-def _row_cells(line: str) -> list[str]:
-    return [c.strip().strip("*` ") for c in line.strip().split("|")[1:-1]]
+# --- canonical DDL ----------------------------------------------------------- #
+_CREATE_TABLE = re.compile(r"CREATE TABLE\s+(\w+)\s*\((.*?)\n\);", re.S)
+_COLUMN = re.compile(r"^(\w+)\s+(\w+)\s*(?:COMMENT\s*'(.*)')?,?$")
+_FOREIGN_KEY = re.compile(r"FOREIGN KEY\s*\((\w+)\)\s*REFERENCES\s+(\w+)\((\w+)\)")
 
 
-def _is_separator(cells: list[str]) -> bool:
-    return all(set(c) <= set("-:= ") for c in cells) if cells else True
+def _permissible(comment: str | None) -> str:
+    """Pull the ``permissible`` field out of a column's JSON COMMENT.
+
+    The COMMENT is JSON but embedded in a single-quoted SQL string, so inner double
+    quotes arrive escaped as ``\\"``. A column whose comment will not parse yields
+    an empty string rather than aborting the vendor run.
+    """
+    if not comment:
+        return ""
+    try:
+        return str(json.loads(comment.replace('\\"', '"')).get("permissible", ""))
+    except json.JSONDecodeError:
+        return ""
 
 
-def _parse(text: str) -> dict[str, dict[str, Any]]:
-    lines = text.splitlines()
-    maturity: str | None = None
+def _parse_ddl(text: str) -> dict[str, dict[str, Any]]:
     tables: dict[str, dict[str, Any]] = {}
-    i = 0
-    n = len(lines)
-    while i < n:
-        line = lines[i]
-        top = re.match(r"^#\s+\*\*(.+?)\*\*", line)
-        if top:
-            label = top.group(1).lower()
-            if "beta" in label:
-                maturity = "beta"
-            elif "concept" in label:
-                maturity = "concept"
-            i += 1
-            continue
-        sec = re.match(r"^##\s+(.+?)\s*$", line)
-        if sec:
-            table = _norm_table(sec.group(1))
-            cols, alias = _parse_section(lines, i + 1)
-            entry: dict[str, Any] = {"maturity": maturity, "columns": cols}
-            if alias:
-                entry["alias_of"] = alias
-            tables[table] = entry
-        i += 1
-    _resolve_aliases(tables)
+    for match in _CREATE_TABLE.finditer(text):
+        name, body = match.group(1), match.group(2)
+        columns: list[dict[str, str]] = []
+        foreign_keys: list[dict[str, str]] = []
+        for raw in body.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("--"):
+                continue
+            if fk := _FOREIGN_KEY.search(line):
+                foreign_keys.append(
+                    {"column": fk.group(1), "references": f"{fk.group(2)}.{fk.group(3)}"}
+                )
+                continue
+            if col := _COLUMN.match(line):
+                columns.append(
+                    {
+                        "name": col.group(1),
+                        "dtype": col.group(2).upper(),
+                        "permissible": _permissible(col.group(3)),
+                    }
+                )
+        tables[name] = {"columns": columns, "foreign_keys": foreign_keys}
     return tables
 
 
-def _parse_section(lines: list[str], start: int) -> tuple[list[dict[str, str]], str | None]:
-    """Parse the first schema table (and any alias note) in a section body."""
-    alias: str | None = None
-    # Scan the section for an alias note and the first schema-table header.
-    j = start
-    while j < len(lines) and not lines[j].startswith("## "):
-        body = lines[j]
-        if alias is None and "same schema as" in body.lower():
-            ref = re.search(r"`([a-z_]+)`|\(#([a-z-]+)\)", body)
-            if ref:
-                alias = (ref.group(1) or ref.group(2) or "").replace("-", "_")
-        cells = _row_cells(lines[j]) if lines[j].strip().startswith("|") else []
-        if len(cells) >= 2 and cells[0].lower() in {"variable name", "column name"}:
-            has_dtypes = cells[1].lower() in {"data type", "datatype"}
-            cols = _collect_rows(lines, j + 1, has_dtypes)
-            return cols, alias
-        j += 1
-    return [], alias
-
-
-def _collect_rows(lines: list[str], start: int, has_dtypes: bool) -> list[dict[str, str]]:
-    cols: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for line in lines[start:]:
-        stripped = line.strip()
-        if stripped.startswith("+"):  # grid-table separator
+# --- website maturity badges (the only per-table tiering that exists) --------- #
+def _parse_maturity(text: str) -> dict[str, str]:
+    lines = text.splitlines()
+    maturity: dict[str, str] = {}
+    for i, line in enumerate(lines):
+        heading = re.match(r"^##\s+(.+?)\s*$", line)
+        if not heading:
             continue
-        if not stripped.startswith("|"):
-            break  # blank line or prose ends the table
-        cells = _row_cells(line)
-        if not cells or _is_separator(cells):
-            continue
-        name = cells[0]
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
-            continue  # header echo, example row, or malformed
-        if name in seen:
-            continue
-        if has_dtypes:
-            dtype = cells[1].upper() if len(cells) > 1 else ""
-            if dtype not in KNOWN_DTYPES:
-                continue
-        else:
-            dtype = "UNKNOWN"
-        seen.add(name)
-        cols.append({"name": name, "dtype": dtype})
-    return cols
-
-
-def _resolve_aliases(tables: dict[str, dict[str, Any]]) -> None:
-    for entry in tables.values():
-        target = entry.get("alias_of")
-        if target and not entry["columns"] and target in tables:
-            entry["columns"] = [dict(c) for c in tables[target]["columns"]]
+        raw = re.sub(r"\{#.*?\}", "", heading.group(1)).replace("*", "").strip()
+        table = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+        table = TABLE_RENAME.get(table, table)
+        for probe in lines[i + 1 : i + 1 + _BADGE_SCAN_LINES]:
+            if badge := re.search(r"Maturity-(\w+)-", probe):
+                maturity[table] = badge.group(1).lower()
+                break
+    return maturity
 
 
 def main() -> None:
-    text = _fetch_text(QMD_PATH)
-    tables = _parse(text)
-    non_empty = {t: v for t, v in tables.items() if v["columns"]}
+    tables = _parse_ddl(_fetch(CLIF_REPO, CLIF_COMMIT, DDL_PATH))
+    maturity = _parse_maturity(_fetch(WEBSITE_REPO, WEBSITE_COMMIT, QMD_PATH))
+    for name, entry in tables.items():
+        # A DDL table the website never documented has no tier; record it as such
+        # rather than guessing one.
+        entry["maturity"] = maturity.get(name)
 
     payload = {
         "clif_version": CLIF_VERSION,
-        "source_repo": f"https://github.com/{REPO}",
-        "source_commit": COMMIT,
-        "source_path": QMD_PATH,
+        "source_repo": f"https://github.com/{CLIF_REPO}",
+        "source_commit": CLIF_COMMIT,
+        "source_path": DDL_PATH,
         "retrieved_at": RETRIEVED_AT,
+        "maturity_source": {
+            "repo": f"https://github.com/{WEBSITE_REPO}",
+            "commit": WEBSITE_COMMIT,
+            "path": QMD_PATH,
+            "note": (
+                "Per-table maturity badges only. The canonical CLIF repo's maturity.md "
+                "tiers the project as a whole and does not label individual tables, so "
+                "the website badge is the sole per-table beta/concept signal. Six tables "
+                "carry a Concept badge while sitting under the website's 'Beta tables' "
+                "heading; the badge is authoritative."
+            ),
+        },
         "note": (
-            "Parsed from the CLIF 2.1.0 Quarto data dictionary. Column data types "
-            "recorded as UNKNOWN come from Concept-tier tables the dictionary "
-            "documents without a Data Type column; the schema generator defaults "
-            "them to string."
+            "Columns, data types, permissible values, and foreign keys are parsed from "
+            "the consortium's canonical CLIF 2.1 DDL. clifpy's schemas/2.1/*.yaml is the "
+            "second canonical artifact and is cross-checked in the test suite, not merged."
         ),
-        "tables": dict(sorted(tables.items())),
+        "tables": {
+            name: {
+                "maturity": entry["maturity"],
+                "foreign_keys": entry["foreign_keys"],
+                "columns": entry["columns"],
+            }
+            for name, entry in sorted(tables.items())
+        },
     }
     out = DATA_ROOT / "dictionary.json"
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    total_cols = sum(len(v["columns"]) for v in tables.values())
-    print(
-        f"Wrote {out.name}: {len(tables)} tables "
-        f"({len(non_empty)} with columns), {total_cols} columns total."
-    )
-    for t, v in sorted(tables.items()):
-        flag = "" if v["columns"] else "  <-- EMPTY"
-        print(f"  {v['maturity'] or '?':7} {t:30} {len(v['columns']):2} cols{flag}")
+    total = sum(len(e["columns"]) for e in tables.values())
+    print(f"Wrote {out.name} from the canonical DDL: {len(tables)} tables, {total} columns.")
+    for name, entry in sorted(tables.items()):
+        tier = entry["maturity"] or "untiered"
+        fks = f"  fk->{len(entry['foreign_keys'])}" if entry["foreign_keys"] else ""
+        print(f"  {tier:9} {name:30} {len(entry['columns']):2} cols{fks}")
 
 
 if __name__ == "__main__":

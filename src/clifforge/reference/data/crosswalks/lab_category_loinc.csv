@@ -1,0 +1,53 @@
+lab_category,lab_loinc_code,lab_specimen_category,lab_specimen_name
+albumin,1751-7,serum,Serum
+alkaline_phosphatase,6768-6,serum,Serum
+alt,1742-6,serum,Serum
+ast,1920-8,serum,Serum
+basophils_percent,706-2,blood,Blood
+basophils_absolute,704-7,blood,Blood
+bicarbonate,1963-8,serum,Serum
+bilirubin_total,1975-2,serum,Serum
+bilirubin_conjugated,15152-2,serum,Serum
+bilirubin_unconjugated,1971-1,serum,Serum
+bun,3094-0,serum,Serum
+calcium_total,17861-6,serum,Serum
+calcium_ionized,1994-3,blood,Blood
+chloride,2075-0,serum,Serum
+creatinine,2160-0,serum,Serum
+crp,1988-5,serum,Serum
+eosinophils_percent,713-8,blood,Blood
+eosinophils_absolute,711-2,blood,Blood
+esr,4537-7,blood,Blood
+ferritin,2276-4,serum,Serum
+glucose_fingerstick,41653-7,blood,Capillary blood
+glucose_serum,2345-7,serum,Serum
+hemoglobin,718-7,blood,Blood
+phosphate,2777-1,serum,Serum
+inr,6301-6,plasma,Plasma
+lactate,32693-4,blood,Blood
+ldh,14804-9,serum,Serum
+lymphocytes_percent,736-9,blood,Blood
+lymphocytes_absolute,731-0,blood,Blood
+magnesium,19123-9,serum,Serum
+monocytes_percent,5905-5,blood,Blood
+monocytes_absolute,742-7,blood,Blood
+neutrophils_percent,770-8,blood,Blood
+neutrophils_absolute,751-8,blood,Blood
+pco2_arterial,2019-8,blood,Arterial blood
+po2_arterial,2703-7,blood,Arterial blood
+pco2_venous,2021-4,blood,Venous blood
+ph_arterial,2744-1,blood,Arterial blood
+ph_venous,2746-6,blood,Venous blood
+platelet_count,777-3,blood,Blood
+potassium,2823-3,serum,Serum
+procalcitonin,33959-8,serum,Serum
+pt,5902-2,plasma,Plasma
+ptt,14979-9,plasma,Plasma
+so2_arterial,2708-6,blood,Arterial blood
+so2_mixed_venous,19224-5,blood,Mixed venous blood
+so2_central_venous,97549-0,blood,Central venous blood
+sodium,2951-2,serum,Serum
+total_protein,2885-2,serum,Serum
+troponin_i,10839-9,serum,Serum
+troponin_t,6598-7,serum,Serum
+wbc,6690-2,blood,Blood

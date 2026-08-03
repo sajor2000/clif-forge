@@ -205,20 +205,34 @@ def sample_adt(
     enrich = bool(params.get("enrich_locations"))
     arrival = _arrival_category(spine, params, rng)
 
+    hosp_type_marginal = params.get("hospital_type_marginal")
+    if isinstance(hosp_type_marginal, dict) and hosp_type_marginal:
+        hospital_type = categorical(hosp_type_marginal, rng)
+    else:
+        hospital_type = _HOSPITAL_TYPE
+    loc_type_marginal = params.get("location_type_marginal")
+
     movements: list[AdtMovement] = []
     cursor = admit_dttm
     for category, n_int in _location_segments(spine.support_level, enrich=enrich, arrival=arrival):
         out = cursor + timedelta(hours=n_int * grid_step)
+        if category == "icu":
+            if isinstance(loc_type_marginal, dict) and loc_type_marginal:
+                location_type = categorical(loc_type_marginal, rng)
+            else:
+                location_type = _ICU_LOCATION_TYPE
+        else:
+            location_type = None
         movements.append(
             AdtMovement(
                 hospitalization_id=hid,
                 hospital_id=hospital_id,
-                hospital_type=_HOSPITAL_TYPE,
+                hospital_type=hospital_type,
                 in_dttm=cursor,
                 out_dttm=out,
                 location_name=category,
                 location_category=category,
-                location_type=_ICU_LOCATION_TYPE if category == "icu" else None,
+                location_type=location_type,
             )
         )
         cursor = out

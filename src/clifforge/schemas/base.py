@@ -21,12 +21,32 @@ them. A table unit tightens ``required`` on the columns it actually emits.
 from __future__ import annotations
 
 import pandera.polars as pa
+import polars as pl
 from pandera.engines.polars_engine import DateTime
 
 from clifforge.reference import bounds, categories, loader
 
 #: Tz-aware UTC datetime dtype — a naive (tz-less) datetime column fails validation.
 UTC_DATETIME = DateTime(time_zone="UTC")
+
+#: THE ID-TYPE RULE, validation side. These three analyst-facing join keys are
+#: emitted as integers (see ``generate._common.enforce_numeric_ids``, which imports
+#: this tuple) and so must NOT be dtype-pinned to ``str`` like other ``*_id``
+#: columns. :func:`build_column` and ``scripts/gen_schemas.py`` both branch on this,
+#: which is what keeps the committed schema modules identical to the runtime builder.
+NUMERIC_ID_COLUMNS = ("patient_id", "hospitalization_id", "hospitalization_joined_id")
+
+#: The referential backbone (R8): the only id columns that are required *and*
+#: non-nullable. Every canonical 2.1 table that has these declares them required.
+#:
+#: Other ``*_id`` columns are deliberately NOT required, because canonically they
+#: are not: clifpy's 2.1 schemas mark ``device_id``, ``med_order_id``,
+#: ``hospitalization_joined_id``, ``billing_provider_id``, ``performing_provider_id``
+#: and ``microbiology_susceptibility.organism_id`` optional. Treating every
+#: ``*_id`` as mandatory (the old ``endswith("_id")`` heuristic) rejected frames
+#: CLIF considers valid, and would have made a no-growth culture — which has no
+#: organism to identify — impossible to represent.
+REQUIRED_ID_COLUMNS = ("patient_id", "hospitalization_id")
 
 #: CLIF dictionary data types treated as floating point.
 _FLOAT_DTYPES = {"DOUBLE", "FLOAT", "NUMERIC"}
@@ -36,12 +56,16 @@ _INT_DTYPES = {"INT", "INTEGER", "BIGINT"}
 _BOOL_DTYPES = {"BOOLEAN", "BOOL"}
 
 
-def id_column() -> pa.Column:
-    """Required, non-nullable string identifier column (device/provider/order ids)."""
-    return pa.Column(str, nullable=False, required=True)
+def id_column(*, required: bool = False, nullable: bool = True) -> pa.Column:
+    """String identifier column (``device_id``, ``provider_id``, ``organism_id``, ...).
+
+    Optional and nullable by default, matching canonical 2.1: these ids are how a
+    row *may* link to another table, not a guarantee that it does.
+    """
+    return pa.Column(str, nullable=nullable, required=required)
 
 
-def numeric_id_column() -> pa.Column:
+def numeric_id_column(*, required: bool = True, nullable: bool = False) -> pa.Column:
     """Required, non-nullable **integer** identifier — ``patient_id`` /
     ``hospitalization_id`` / ``hospitalization_joined_id`` — the hardcoded id-type
     rule (see ``generate._common.enforce_numeric_ids``).
@@ -76,6 +100,16 @@ def utc_datetime(*, required: bool = False, nullable: bool = True) -> pa.Column:
     # pandera accepts an engine dtype instance here at runtime; its stub types
     # the first arg to the narrower dtype union, so this is a stub gap, not a bug.
     return pa.Column(UTC_DATETIME, required=required, nullable=nullable)  # type: ignore[arg-type]
+
+
+def date(*, required: bool = False, nullable: bool = True) -> pa.Column:
+    """Calendar-date column (no time, no zone).
+
+    The canonical DDL types ``patient.birth_date`` as ``DATE``, distinct from the
+    ``DATETIME`` columns R7 requires to be tz-aware UTC — a birth date has no
+    meaningful instant, so it must not be forced into a UTC timestamp.
+    """
+    return pa.Column(pl.Date, required=required, nullable=nullable)
 
 
 def category(table: str, field: str, *, required: bool = False, nullable: bool = True) -> pa.Column:
@@ -127,8 +161,8 @@ def build_column(table: str, name: str, dtype: str) -> pa.Column:
     """Map one dictionary ``(name, dtype)`` to the strictest applicable column type.
 
     Precedence: mCIDE category (isin) > datetime (UTC) > id > numeric (with bounds
-    where available) > boolean > string fallback. ``UNKNOWN`` dtypes (Concept-tier
-    columns the dictionary leaves untyped) default to string.
+    where available) > boolean > string fallback. ``UNKNOWN`` dtypes (columns the
+    dictionary leaves untyped) default to string.
     """
     dt = dtype.upper()
 
@@ -138,6 +172,13 @@ def build_column(table: str, name: str, dtype: str) -> pa.Column:
 
     if dt == "DATETIME":
         return utc_datetime()
+
+    if dt == "DATE":
+        return date()
+
+    if name in NUMERIC_ID_COLUMNS:
+        backbone = name in REQUIRED_ID_COLUMNS
+        return numeric_id_column(required=backbone, nullable=not backbone)
 
     if name.endswith("_id"):
         return id_column()

@@ -1,0 +1,17 @@
+assay_key,lab_loinc_code
+clostridium_difficile,54067-4
+sars_cov2,94500-6
+respiratory_syncytial_virus,92131-2
+blood,600-7
+blood_buffy,600-7
+urine,630-4
+genito_urinary_tract,630-4
+kidneys_renal_pelvis_ureters_bladder,630-4
+respiratory_tract,624-7
+nasopharynx_upperairway,43214-6
+larynx,626-2
+central_nervous_system,606-4
+brain,606-4
+feces_stool,625-4
+wound,6462-6
+skin,620-5

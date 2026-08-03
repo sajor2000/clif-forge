@@ -4,7 +4,7 @@ Do not hand-edit the generated column list; regenerate with
 ``uv run python scripts/gen_schemas.py``. A table unit MAY append clinical-coupling
 refinements below SCHEMA via .update_column()/.add_columns() (see U3 / R15).
 
-Table: ecmo_mcs (beta)
+Table: ecmo_mcs (concept)
 """
 
 from __future__ import annotations
@@ -20,10 +20,13 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "device_name": base.string(),
         "device_category": base.string(),
         "mcs_group": base.string(),
-        "device_metric_name": base.string(),
-        "device_rate": base.plain_float(),
+        "ecmo_configuration_category": base.string(),
+        "control_parameter_name": base.string(),
+        "control_parameter_category": base.string(),
+        "control_parameter_value": base.plain_float(),
         "flow": base.plain_float(),
-        "sweep": base.plain_float(),
+        "sweep_set": base.plain_float(),
+        "fdO2_set": base.plain_float(),
     },
     strict=False,
     coerce=False,

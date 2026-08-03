@@ -57,10 +57,39 @@ _HOSPITALIZATION_CATEGORICALS = ("admission_type_category", "discharge_category"
 # infusion estimator models on/off timing per ``med_category``, not dose.
 _MODELED_COLUMNS: dict[str, frozenset[str]] = {
     "patient": frozenset(_PATIENT_CATEGORICALS),
-    "hospitalization": frozenset(_HOSPITALIZATION_CATEGORICALS),
+    "hospitalization": frozenset((*_HOSPITALIZATION_CATEGORICALS, "age_at_admission")),
     "vitals": frozenset({"vital_category", "vital_value"}),
     "labs": frozenset({"lab_category", "lab_value_numeric"}),
     "medication_admin_continuous": frozenset({"med_category"}),
+    "code_status": frozenset({"code_status_category"}),
+    "adt": frozenset({"location_category", "location_type", "hospital_type"}),
+    "respiratory_support": frozenset(
+        {
+            "device_category",
+            "mode_category",
+            "fio2_set",
+            "peep_set",
+            "tidal_volume_set",
+            "resp_rate_set",
+        }
+    ),
+    "medication_admin_intermittent": frozenset({"med_category"}),
+    "microbiology_culture": frozenset(
+        {"fluid_category", "method_category", "organism_category", "organism_group"}
+    ),
+    "crrt_therapy": frozenset(
+        {
+            "crrt_mode_category",
+            "blood_flow_rate",
+            "dialysate_flow_rate",
+            "ultrafiltration_out",
+        }
+    ),
+    "ecmo_mcs": frozenset({"device_category", "mcs_group", "flow", "sweep", "fdO2"}),
+    "patient_assessments": frozenset({"assessment_category"}),
+    "position": frozenset({"position_category"}),
+    "hospital_diagnosis": frozenset({"diagnosis_code", "diagnosis_primary"}),
+    "patient_procedures": frozenset({"procedure_code"}),
 }
 
 # Vitals fit with per-state AR1 (static anthropometrics excluded).
@@ -116,8 +145,17 @@ def _icu_cohort(adt: pl.LazyFrame | None) -> set[str]:
 # Real-data discovery (KTD-1: confined to this module)
 # --------------------------------------------------------------------------- #
 def _find_table(real_dir: Path, table: str) -> Path | None:
-    """Locate a CLIF table file, tolerating the ``clif_`` prefix and csv/parquet."""
-    for stem in (f"clif_{table}", table):
+    """Locate a CLIF table file under ``real_dir``.
+
+    Accepts the maturity-tagged forge layout (``clif_<table>_2.1_<maturity>``),
+    the untagged consortium layout (``clif_<table>``), and a bare ``<table>``
+    stem — real site extracts use the untagged form; forge-generated packs use
+    the tagged one.
+    """
+    from clifforge.generate.filenames import table_parquet_stem
+
+    stems = (table_parquet_stem(table), f"clif_{table}", table)
+    for stem in stems:
         for ext in (".parquet", ".csv"):
             candidate = real_dir / f"{stem}{ext}"
             if candidate.exists():
@@ -244,6 +282,410 @@ def _source_columns(lf: pl.LazyFrame) -> set[str]:
     return set(lf.collect_schema().names())
 
 
+def _record_table(
+    name: str,
+    df: pl.DataFrame,
+    params: dict[str, object],
+    records: list[SuppressionRecord],
+    table_blocks: dict[str, dict[str, object]],
+    field_audit: dict[str, list[dict[str, str]]],
+    all_records: list[SuppressionRecord],
+    source_columns: set[str],
+) -> None:
+    """Attach a fitted prior-table block when any params survived the gate."""
+    if not params:
+        return
+    all_records.extend(records)
+    table_blocks[name] = {
+        "n_records": df.height,
+        "fitted": True,
+        "params": params,
+    }
+    modeled = _MODELED_COLUMNS.get(name, frozenset())
+    field_audit[name] = _field_sources(name, source_columns, modeled)
+
+
+def _fit_source_prior_tables(
+    train_tables: dict[str, pl.LazyFrame],
+    tables: dict[str, pl.LazyFrame],
+    table_blocks: dict[str, dict[str, object]],
+    field_audit: dict[str, list[dict[str, str]]],
+    all_records: list[SuppressionRecord],
+    *,
+    n_hospitalizations: int,
+) -> None:
+    """Fit source-present tables that were previously prior/spine-only."""
+    # code_status (patient-level)
+    if "code_status" in train_tables and "hospitalization" in train_tables:
+        cs_df = train_tables["code_status"].collect()
+        hosp_df = train_tables["hospitalization"].collect()
+        params, rec = estimators.fit_code_status_rates(cs_df, hosp_df)
+        _record_table(
+            "code_status",
+            cs_df,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["code_status"]),
+        )
+
+    # adt — location marginals + validated arrival / direct-ICU knobs
+    if "adt" in train_tables:
+        adt_df = train_tables["adt"].collect()
+        params, rec = estimators.fit_categorical_marginals(
+            adt_df, ("location_category", "location_type", "hospital_type")
+        )
+        # location_type must be mCIDE-conformant for generation (the source extract uses site
+        # labels like ``cvicu_icu`` that are not in the consortium vocabulary).
+        try:
+            valid_loc = set(loader.categories("adt", "location_type"))
+        except Exception:
+            valid_loc = set()
+        loc_m = params.get("location_type_marginal")
+        if isinstance(loc_m, dict) and valid_loc:
+            filtered = {k: v for k, v in loc_m.items() if k in valid_loc}
+            if filtered:
+                total = sum(filtered.values())
+                params["location_type_marginal"] = {k: v / total for k, v in filtered.items()}
+            else:
+                params.pop("location_type_marginal", None)
+        arrival, arec = estimators.fit_adt_arrival(adt_df)
+        params.update(arrival)
+        rec = [*rec, *arec]
+        # Mild location enrichment so ward/stepdown/ed appear after arrival when
+        # the spine supports them — same enrich_locations flag recalibrate uses.
+        if "arrival_location_marginal" in params:
+            params["enrich_locations"] = True
+        _record_table(
+            "adt",
+            adt_df,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["adt"]),
+        )
+
+    # respiratory_support
+    if "respiratory_support" in train_tables:
+        rs_df = train_tables["respiratory_support"].collect()
+        params, rec = estimators.fit_categorical_marginals(
+            rs_df, ("device_category", "mode_category")
+        )
+        cont, crec = estimators.fit_continuous_marginals(
+            rs_df, ("fio2_set", "peep_set", "tidal_volume_set", "resp_rate_set")
+        )
+        # Drop quantile edges that fall outside consortium bounds (source chart noise).
+        for field, edges_key in (
+            ("fio2_set", "fio2_set_quantile_bin_edges"),
+            ("peep_set", "peep_set_quantile_bin_edges"),
+            ("tidal_volume_set", "tidal_volume_set_quantile_bin_edges"),
+            ("resp_rate_set", "resp_rate_set_quantile_bin_edges"),
+        ):
+            edges = cont.get(edges_key)
+            if not isinstance(edges, list):
+                continue
+            try:
+                lo, hi = loader.bounds("respiratory_support", field)
+            except Exception:
+                continue
+            clean = [float(e) for e in edges if e is not None and lo <= float(e) <= hi]
+            if len(clean) >= 2:
+                cont[edges_key] = sorted(set(clean))
+            else:
+                cont.pop(edges_key, None)
+        params.update(cont)
+        rec = [*rec, *crec]
+        prev, prec = estimators.fit_stay_prevalence_by_category(
+            rs_df,
+            n_hospitalizations,
+            category_col="device_category",
+            categories=("IMV", "NIPPV", "High Flow NC"),
+        )
+        params.update(prev)
+        rec = [*rec, *prec]
+        # ICU-conditional device prevalences (validated NIV path targets).
+        if "adt" in train_tables:
+            icu_ids = (
+                train_tables["adt"]
+                .filter(pl.col("location_category") == _ICU_LOCATION_CATEGORY)
+                .select("hospitalization_id")
+                .unique()
+                .collect()
+            )
+            n_icu = icu_ids.height
+            if n_icu >= 20:
+                rs_icu = rs_df.join(icu_ids, on="hospitalization_id", how="inner")
+                icu_prev, icu_rec = estimators.fit_stay_prevalence_by_category(
+                    rs_icu,
+                    n_icu,
+                    category_col="device_category",
+                    categories=("IMV", "NIPPV", "High Flow NC"),
+                )
+                params.update({f"icu_{k}": v for k, v in icu_prev.items()})
+                rec = [*rec, *icu_rec]
+                by_cat = icu_prev.get("stay_prevalence_by_category")
+            else:
+                by_cat = params.get("stay_prevalence_by_category")
+        else:
+            by_cat = params.get("stay_prevalence_by_category")
+        # Convenience niv block for the gated generator path (validated NIV path).
+        if isinstance(by_cat, dict):
+            params["niv"] = {
+                "nippv_prob": float(by_cat.get("NIPPV", 0.0)),
+                "hfnc_prob": float(by_cat.get("High Flow NC", 0.0)),
+            }
+            params["enrich_devices"] = True
+        _record_table(
+            "respiratory_support",
+            rs_df,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["respiratory_support"]),
+        )
+
+    # medication_admin_intermittent
+    if "medication_admin_intermittent" in train_tables:
+        mai = train_tables["medication_admin_intermittent"].select(
+            "hospitalization_id", "med_category"
+        ).collect()
+        try:
+            valid_meds = set(loader.categories("medication_admin_intermittent", "med_category"))
+        except Exception:
+            valid_meds = set()
+        if valid_meds:
+            mai_fit = mai.filter(pl.col("med_category").is_in(list(valid_meds)))
+            if mai_fit.height < 20:
+                mai_fit = mai
+        else:
+            mai_fit = mai
+        params, rec = estimators.fit_top_k_category(mai_fit, "med_category", k=30)
+        prev, prec = estimators.fit_stay_prevalence(mai, n_hospitalizations)
+        params.update(prev)
+        rec = [*rec, *prec]
+        _record_table(
+            "medication_admin_intermittent",
+            mai,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["medication_admin_intermittent"]),
+        )
+
+    # microbiology_culture
+    if "microbiology_culture" in train_tables:
+        cols = [
+            c
+            for c in (
+                "hospitalization_id",
+                "fluid_category",
+                "method_category",
+                "organism_category",
+                "organism_group",
+            )
+            if c in _source_columns(tables["microbiology_culture"])
+        ]
+        mc = train_tables["microbiology_culture"].select(cols).collect()
+        params, rec = estimators.fit_categorical_marginals(
+            mc, ("fluid_category", "method_category", "organism_category", "organism_group")
+        )
+        adt_for_cultures: pl.DataFrame | None = (
+            train_tables["adt"].collect() if "adt" in train_tables else None
+        )
+        rate, rrec = estimators.fit_cultures_per_icu_day(mc, adt_for_cultures)
+        params.update(rate)
+        rec = [*rec, *rrec]
+        prev, prec = estimators.fit_stay_prevalence(mc, n_hospitalizations)
+        params.update(prev)
+        rec = [*rec, *prec]
+        _record_table(
+            "microbiology_culture",
+            mc,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["microbiology_culture"]),
+        )
+
+    # crrt_therapy
+    if "crrt_therapy" in train_tables:
+        crrt = train_tables["crrt_therapy"].collect()
+        params, rec = estimators.fit_categorical_marginals(crrt, ("crrt_mode_category",))
+        cont, crec = estimators.fit_continuous_marginals(
+            crrt,
+            (
+                "blood_flow_rate",
+                "dialysate_flow_rate",
+                "ultrafiltration_out",
+                "pre_filter_replacement_fluid_rate",
+                "post_filter_replacement_fluid_rate",
+            ),
+        )
+        params.update(cont)
+        rec = [*rec, *crec]
+        prev, prec = estimators.fit_stay_prevalence(crrt, n_hospitalizations)
+        params.update(prev)
+        # Validated generator path uses ``crrt_prob`` as P(CRRT | renal flag).
+        # Approximate from stay prevalence ÷ renal flag prevalence on the spine.
+        if "stay_prevalence" in params and "spine" in table_blocks:
+            spine_params = table_blocks["spine"].get("params", {})
+            flag_prev: object = (
+                spine_params.get("flag_prevalence_by_level", {})
+                if isinstance(spine_params, dict)
+                else {}
+            )
+            renal_rates: list[float] = []
+            if isinstance(flag_prev, dict):
+                for cell in flag_prev.values():
+                    if isinstance(cell, dict) and "renal_flag" in cell:
+                        renal_rates.append(float(cell["renal_flag"]))
+            renal_mean = sum(renal_rates) / len(renal_rates) if renal_rates else 0.0
+            if renal_mean > 0:
+                stay_prev = params["stay_prevalence"]
+                assert isinstance(stay_prev, (int, float))
+                params["crrt_prob"] = round(min(1.0, float(stay_prev) / renal_mean), 6)
+        rec = [*rec, *prec]
+        _record_table(
+            "crrt_therapy",
+            crrt,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["crrt_therapy"]),
+        )
+
+    # ecmo_mcs
+    if "ecmo_mcs" in train_tables:
+        ecmo = train_tables["ecmo_mcs"].collect()
+        params, rec = estimators.fit_categorical_marginals(
+            ecmo, ("device_category", "mcs_group")
+        )
+        cont, crec = estimators.fit_continuous_marginals(
+            ecmo, ("flow", "sweep", "fdO2")
+        )
+        params.update(cont)
+        rec = [*rec, *crec]
+        prev, prec = estimators.fit_stay_prevalence(ecmo, n_hospitalizations)
+        params.update(prev)
+        rec = [*rec, *prec]
+        _record_table(
+            "ecmo_mcs",
+            ecmo,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["ecmo_mcs"]),
+        )
+
+    # patient_assessments (large — select category only)
+    if "patient_assessments" in train_tables:
+        pa = train_tables["patient_assessments"].select("assessment_category").collect()
+        params, rec = estimators.fit_categorical_marginals(pa, ("assessment_category",))
+        _record_table(
+            "patient_assessments",
+            pa,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["patient_assessments"]),
+        )
+
+    # position
+    if "position" in train_tables:
+        pos = train_tables["position"].collect()
+        params, rec = estimators.fit_categorical_marginals(pos, ("position_category",))
+        rs_for_prone: pl.DataFrame | None = (
+            train_tables["respiratory_support"]
+            .select("hospitalization_id", "device_category")
+            .collect()
+            if "respiratory_support" in train_tables
+            else None
+        )
+        prone, prec = estimators.fit_prone_rates(pos, rs_for_prone)
+        params.update(prone)
+        rec = [*rec, *prec]
+        _record_table(
+            "position",
+            pos,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["position"]),
+        )
+
+    # hospital_diagnosis (top-K codes)
+    if "hospital_diagnosis" in train_tables:
+        hd = train_tables["hospital_diagnosis"].select(
+            "diagnosis_code", "diagnosis_primary"
+        ).collect()
+        params, rec = estimators.fit_top_k_category(hd, "diagnosis_code", k=40)
+        prim, prec = estimators.fit_categorical_marginals(
+            hd.with_columns(pl.col("diagnosis_primary").cast(pl.String)),
+            ("diagnosis_primary",),
+        )
+        params.update(prim)
+        rec = [*rec, *prec]
+        _record_table(
+            "hospital_diagnosis",
+            hd,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["hospital_diagnosis"]),
+        )
+
+    # patient_procedures — intersect with vendored CPT list when possible
+    if "patient_procedures" in train_tables:
+        pp = (
+            train_tables["patient_procedures"]
+            .select("hospitalization_id", "procedure_code")
+            .collect()
+        )
+        try:
+            vendored = {row["procedure_code"] for row in loader.code_list("patient_procedures")}
+        except Exception:
+            vendored = set()
+        if vendored:
+            pp_filtered = pp.filter(pl.col("procedure_code").is_in(list(vendored)))
+            pp_fit = pp_filtered if pp_filtered.height >= 20 else pp
+        else:
+            pp_fit = pp
+        params, rec = estimators.fit_top_k_category(pp_fit, "procedure_code", k=40)
+        prev, prec = estimators.fit_stay_prevalence(pp, n_hospitalizations)
+        params.update(prev)
+        rec = [*rec, *prec]
+        _record_table(
+            "patient_procedures",
+            pp,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["patient_procedures"]),
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Suppression-audit roll-up
 # --------------------------------------------------------------------------- #
@@ -342,6 +784,9 @@ def run_fit(
     hosp_df = train_tables["hospitalization"].collect()
     h_params, h_rec = estimators.fit_categorical_marginals(hosp_df, _HOSPITALIZATION_CATEGORICALS)
     all_records.extend(h_rec)
+    age_params, age_rec = estimators.fit_age_quantiles(hosp_df)
+    all_records.extend(age_rec)
+    h_params.update(age_params)
     table_blocks["hospitalization"] = {
         "n_records": hosp_df.height,
         "fitted": True,
@@ -371,8 +816,20 @@ def run_fit(
             **o_params,
             **f_params,
             "state_model": config.as_manifest(),
+            # Validated trajectory defaults (same knobs recalibrate_to_network_median
+            # sets). Empirical reference spine rates are preserved; these only enable the
+            # terminal-decline path the generators already honor.
+            "terminal_deterioration_hours": 24.0,
         },
     }
+    # Coupled admission route (validated full-hospital / ADT front-door method):
+    # one draw per stay drives hospitalization admission_type and ADT arrival.
+    route_params, route_rec = estimators.fit_admission_route_marginal(hosp_df)
+    all_records.extend(route_rec)
+    if route_params:
+        spine_params = table_blocks["spine"]["params"]
+        assert isinstance(spine_params, dict)
+        spine_params.update(route_params)
 
     # --- per-state AR1 physiology -----------------------------------------
     if "vitals" in train_tables:
@@ -462,6 +919,17 @@ def run_fit(
             _source_columns(tables["medication_admin_continuous"]),
             _MODELED_COLUMNS["medication_admin_continuous"],
         )
+
+    # --- source-present prior tables (all-28 realism pack) ------------------
+    n_hosp = len(train_hosp_set)
+    _fit_source_prior_tables(
+        train_tables,
+        tables,
+        table_blocks,
+        field_audit,
+        all_records,
+        n_hospitalizations=n_hosp,
+    )
 
     # --- assemble manifest + pack -----------------------------------------
     ref = loader.provenance()

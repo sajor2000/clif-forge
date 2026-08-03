@@ -27,6 +27,7 @@ SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
         "med_dose_unit": base.string(),
         "mar_action_name": base.string(),
         "mar_action_category": base.category("medication_admin_continuous", "mar_action_category"),
+        "mar_action_group": base.string(),
     },
     strict=False,
     coerce=False,

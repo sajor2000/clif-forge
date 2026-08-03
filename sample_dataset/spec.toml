@@ -1,2 +1,9 @@
-# Master-equivalent sample: reproduces the shared master dataset at n=10000, seed 42.
-name = "master-sample"
+# fitted-empirical ICU sample: fitted ``icu_all28`` pack + validated
+# ``recalibrate_fitted_icu`` (spine tempering, sojourn/LOS, gated NIV, ADT arrivals).
+# Committed at n=5000 / seed 42 so every parquet stays under GitHub's 50 MB soft
+# limit (vitals ≈ 41 MB).
+name = "fitted-icu-sample"
+n = 5000
+seed = 42
+base_pack = "data/param_packs/icu_all28"
+mode = "fitted_icu"

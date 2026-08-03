@@ -1,0 +1,114 @@
+{
+  "generator_version": "0.1.0",
+  "spec": {
+    "name": "demo",
+    "n": 40
+  },
+  "seed": 7,
+  "tables": {
+    "_truth": {
+      "rows": 344,
+      "sha256": "5484b569f9cf85b37bafe6473305ca782c9ff75673424c270e34568a8839e245"
+    },
+    "clif_adt_2.1_beta": {
+      "rows": 50,
+      "sha256": "db9cebdeca8077e31e478a6e93a8ba699bacd66f0e57fa6a8d2f7a10bde8b1ce"
+    },
+    "clif_code_status_2.1_concept": {
+      "rows": 50,
+      "sha256": "d97e34a01a7cacad49ae08fab9d718f5b14b6ce720c0199a8557f40e9ce9ac3c"
+    },
+    "clif_crrt_therapy_2.1_concept": {
+      "rows": 128,
+      "sha256": "ae55469c8a551a67d2e68966bd4d55d722c2008bde83a36dead0c6609d59c95e"
+    },
+    "clif_ecmo_mcs_2.1_concept": {
+      "rows": 111,
+      "sha256": "134376c1d195c55a0bbd6dca00f024cc0f1d2a425da8a388d37071cc9a61b934"
+    },
+    "clif_hospital_diagnosis_2.1_concept": {
+      "rows": 721,
+      "sha256": "57eca30d196eb01487017c7897239450fbd3e6b88524343a6e6df2dc22d7f239"
+    },
+    "clif_hospitalization_2.1_beta": {
+      "rows": 40,
+      "sha256": "e5e8096d5973b2bda2198545b24b1c0f3f75125633b249a5aea12ab4d42afdff"
+    },
+    "clif_intake_output_2.1_concept": {
+      "rows": 548,
+      "sha256": "b6dd905065c8d1b3f72fdf4bc805200aa8e4e959e5ceac729bb5df26556ea79b"
+    },
+    "clif_invasive_hemodynamics_2.1_concept": {
+      "rows": 11,
+      "sha256": "4d11552e05d0c615a1ffdcd4071998047e2e2e667d6bfed618159c0d6e3219e5"
+    },
+    "clif_key_icu_orders_2.1_concept": {
+      "rows": 14,
+      "sha256": "946e5a3175ec9b64b92733277328c2ef584d764befa370f13f45665dd6be2c26"
+    },
+    "clif_labs_2.1_beta": {
+      "rows": 58,
+      "sha256": "576c5a8db21378edd036fcde794e92195216c2585f54fbec2522a1a5686c0d0f"
+    },
+    "clif_medication_admin_continuous_2.1_beta": {
+      "rows": 290,
+      "sha256": "75911908099c913175b76809a8bcfe5995f6aec8fd4ecf02fabcd0f90bdd02e1"
+    },
+    "clif_medication_admin_intermittent_2.1_concept": {
+      "rows": 48,
+      "sha256": "333082abd32c28c04e667ccb1cbe36d719f1c1340432449b971c39825f0fae19"
+    },
+    "clif_medication_orders_2.1_concept": {
+      "rows": 179,
+      "sha256": "46aea05322577a48f588f33a9d0ebafc5b39229d63d757f898aaf2a7a44e4c50"
+    },
+    "clif_microbiology_culture_2.1_concept": {
+      "rows": 6,
+      "sha256": "5a4d3f525897e902998faa0c269d038f9d2037e59dcf1143e7b0448f1a92350d"
+    },
+    "clif_microbiology_nonculture_2.1_concept": {
+      "rows": 2,
+      "sha256": "66c0aa092b7e8b9bc07b1d7cf46dce3301b9d6e8a004daadd0c33146a401dc58"
+    },
+    "clif_microbiology_susceptibility_2.1_concept": {
+      "rows": 6,
+      "sha256": "180ef188e3c551e9d568642adc3b8380eb1540d8e73f2b0af0080fb62030c681"
+    },
+    "clif_patient_2.1_beta": {
+      "rows": 40,
+      "sha256": "24a9f7955a6ad3945188720ac2d10fbf903719cd45641a4b507d1f3c5cd52ae5"
+    },
+    "clif_patient_assessments_2.1_beta": {
+      "rows": 158,
+      "sha256": "30b7bbfecde4d229c927681a10e33f44a454785aefb155ddd1340c6e4b4b3bd5"
+    },
+    "clif_patient_procedures_2.1_concept": {
+      "rows": 2,
+      "sha256": "356d5022555518aa6840f9dd9a199f243727e1d5683d5bbf6cac19fd704013e9"
+    },
+    "clif_position_2.1_beta": {
+      "rows": 58,
+      "sha256": "69472d9c096e2e4c3cbf74bed189e396802bb86df2bc0719b8790e6086ed3384"
+    },
+    "clif_provider_2.1_concept": {
+      "rows": 80,
+      "sha256": "62f9f7357e62f1737ec1477b17d373d24b0c6b4d6f7da3354e7d36111626da3e"
+    },
+    "clif_respiratory_support_2.1_beta": {
+      "rows": 77,
+      "sha256": "b8f2961e2f106f4d7f1c3e3ec9d5cf48daca79304da39d1641a63fc1fb6bb428"
+    },
+    "clif_therapy_details_2.1_concept": {
+      "rows": 16,
+      "sha256": "9527f96e2311abab05d210dd7f754830520e4848efc21c88ed6f7c3d2279b9f8"
+    },
+    "clif_transfusion_2.1_concept": {
+      "rows": 9,
+      "sha256": "c88f3d29d809347d7f894d84ffda339edb1665b3191d493fe7856fef11a2498b"
+    },
+    "clif_vitals_2.1_beta": {
+      "rows": 1802,
+      "sha256": "8cd6aff4d336c5fc6dd4b10062db255af122cb09b34f5ec7cf4a273a6ed6b881"
+    }
+  }
+}

@@ -4,7 +4,7 @@ Do not hand-edit the generated column list; regenerate with
 ``uv run python scripts/gen_schemas.py``. A table unit MAY append clinical-coupling
 refinements below SCHEMA via .update_column()/.add_columns() (see U3 / R15).
 
-Table: microbiology_nonculture (beta)
+Table: microbiology_nonculture (concept)
 """
 
 from __future__ import annotations
@@ -15,14 +15,24 @@ from clifforge.schemas import base
 
 SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     {
+        "patient_id": base.numeric_id_column(),
         "hospitalization_id": base.numeric_id_column(),
-        "result_dttm": base.string(),
-        "collect_dttm": base.string(),
-        "order_dttm": base.string(),
+        "result_dttm": base.utc_datetime(),
+        "collect_dttm": base.utc_datetime(),
+        "order_dttm": base.utc_datetime(),
         "fluid_name": base.string(),
-        "component_category": base.string(),
-        "result_unit_category": base.string(),
+        "fluid_category": base.category("microbiology_nonculture", "fluid_category"),
+        "method_name": base.string(),
+        "method_category": base.category("microbiology_nonculture", "method_category"),
+        "micro_order_name": base.string(),
+        "organism_category": base.category("microbiology_nonculture", "organism_category"),
+        "organism_group": base.string(),
+        "result_name": base.string(),
         "result_category": base.category("microbiology_nonculture", "result_category"),
+        "reference_low": base.plain_float(),
+        "reference_high": base.plain_float(),
+        "result_units": base.string(),
+        "lab_loinc_code": base.string(),
     },
     strict=False,
     coerce=False,

@@ -4,7 +4,7 @@ Do not hand-edit the generated column list; regenerate with
 ``uv run python scripts/gen_schemas.py``. A table unit MAY append clinical-coupling
 refinements below SCHEMA via .update_column()/.add_columns() (see U3 / R15).
 
-Table: crrt_therapy (beta)
+Table: crrt_therapy (concept)
 """
 
 from __future__ import annotations

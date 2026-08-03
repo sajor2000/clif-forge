@@ -210,7 +210,7 @@ def test_creatinine_rises_under_renal_failure() -> None:
 # Empirical-quantile (inverse-CDF) marginals
 # --------------------------------------------------------------------------- #
 # A distinctly non-log-normal creatinine marginal: a two-mode distribution with
-# ~half the mass near 0.8 and ~half near 6.0 (mimicking a normal-renal cluster plus
+# ~half the mass near 0.8 and ~half near 6.0 (resembling a normal-renal cluster plus
 # a CKD tail), which a single log-normal cannot represent. On the 101-point grid,
 # probs < 0.50 map to 0.8, probs > 0.50 map to 6.0.
 _BIMODAL_CREATININE = [0.8] * 50 + [6.0] * 51
@@ -309,14 +309,40 @@ def test_names_echo_categories() -> None:
         assert o.lab_name == o.lab_category
 
 
+def test_timing_order_is_order_le_collect_lt_result() -> None:
+    pack = _pack()
+    for o in sample_labs(_spine([3] * 8), pack, np.random.default_rng(0)):
+        assert o.lab_order_dttm <= o.lab_collect_dttm < o.lab_result_dttm
+
+
+def test_frame_crosswalks_are_exact_mcide_companions() -> None:
+    from clifforge.reference import loader
+
+    pack = _pack()
+    frame = labs_frame(sample_labs(_spine([3] * 6), pack, np.random.default_rng(0)))
+    unit = loader.crosswalk("labs", "lab_category", "reference_unit")
+    order_cat = loader.crosswalk("labs", "lab_category", "lab_order_category")
+    order_name = loader.crosswalk("labs", "lab_order_category", "description")
+    ok_orders = set(categories("labs", "lab_order_category"))
+    for row in frame.iter_rows(named=True):
+        assert row["reference_unit"] == unit[row["lab_category"]]
+        assert row["lab_order_category"] == order_cat[row["lab_category"]]
+        assert row["lab_order_category"] in ok_orders
+        assert row["lab_order_name"] == (
+            order_name.get(row["lab_order_category"], row["lab_order_category"])
+            or row["lab_order_category"]
+        )
+
+
 def test_frame_passes_gate_and_datetimes_are_tz_aware() -> None:
     pack = _pack()
     obs: list[LabObservation] = []
     for i in range(20):
         obs += sample_labs(_spine([2, 3, 4, 3, 2], hid=f"H{i}"), pack, np.random.default_rng(i))
     frame = labs_frame(obs)
-    dtype = frame.schema["lab_order_dttm"]
-    assert isinstance(dtype, pl.Datetime) and dtype.time_zone == "UTC"
+    for col in ("lab_order_dttm", "lab_collect_dttm", "lab_result_dttm"):
+        dtype = frame.schema[col]
+        assert isinstance(dtype, pl.Datetime) and dtype.time_zone == "UTC"
     report = gate.validate(frame, "labs", run_secondary=False)
     assert report.pandera_passed
 

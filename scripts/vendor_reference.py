@@ -38,6 +38,17 @@ RETRIEVED_AT = "2026-07-23"
 # mCIDE table folders that are NOT the stable 2.1.0 per-table category sets.
 EXCLUDED_MCIDE_DIRS = {"1_0_0", "2_2_0_WIP"}
 
+# Files under mCIDE/ that are code *tables*, not permissible-value enumerations.
+# `clif_patient_procedure_codes.csv` is a CPT code list
+# (`procedure_code_format,procedure_code,proc_name`) whose first column is the
+# literal "CPT" on every row — indexing it as a category set made
+# `categories("patient_procedures", "procedure_code_format")` return ["CPT"] x 15.
+# It is real reference data (the generator emits these exact codes), so it is
+# vendored and recorded under `code_lists`, just not under the category map.
+CODE_LIST_FILES = {
+    "mCIDE/patient_procedures/clif_patient_procedure_codes.csv": "patient_procedures"
+}
+
 # Upstream misspellings normalized on vendoring so downstream code uses the
 # canonical spelling.
 FOLDER_NORMALIZE = {"postion": "position"}
@@ -109,6 +120,7 @@ def main() -> None:
     all_paths = _fetch_tree()
 
     mcide_map: dict[str, dict[str, str]] = {}
+    code_list_map: dict[str, str] = {}
     for path in sorted(_select_mcide_paths(all_paths)):
         _, table_raw, filename = path.split("/")
         table = FOLDER_NORMALIZE.get(table_raw, table_raw)
@@ -121,6 +133,10 @@ def main() -> None:
         dest = DATA_ROOT / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(text, encoding="utf-8")
+        if path in CODE_LIST_FILES:
+            code_list_map[CODE_LIST_FILES[path]] = rel
+            print(f"  codes  {table} <- {path} (code table, not a category list)")
+            continue
         mcide_map.setdefault(table, {})[field] = rel
         print(f"  mcide  {table}.{field} <- {path}")
 
@@ -147,6 +163,7 @@ def main() -> None:
             "v3.0.0) exist upstream and can be diffed against source_commit."
         ),
         "mcide": {t: dict(sorted(fields.items())) for t, fields in sorted(mcide_map.items())},
+        "code_lists": dict(sorted(code_list_map.items())),
         "outliers": dict(sorted(outlier_map.items())),
     }
     (DATA_ROOT / "manifest.json").write_text(

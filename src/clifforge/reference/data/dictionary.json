@@ -1,1022 +1,1517 @@
 {
   "clif_version": "2.1.0",
-  "source_repo": "https://github.com/clif-consortium/website",
-  "source_commit": "888353c0521ac2ce2c380cf2ec94cedaabd36bfe",
-  "source_path": "data-dictionary/data-dictionary-2.1.0.qmd",
-  "retrieved_at": "2026-07-23",
-  "note": "Parsed from the CLIF 2.1.0 Quarto data dictionary. Column data types recorded as UNKNOWN come from Concept-tier tables the dictionary documents without a Data Type column; the schema generator defaults them to string.",
+  "source_repo": "https://github.com/Common-Longitudinal-ICU-data-Format/CLIF",
+  "source_commit": "966bc5fb0dc0f5664405f833568886ad850d869d",
+  "source_path": "ddl/2.1/CLIF2.1_MYSQL_ddl.sql",
+  "retrieved_at": "2026-08-01",
+  "maturity_source": {
+    "repo": "https://github.com/clif-consortium/website",
+    "commit": "888353c0521ac2ce2c380cf2ec94cedaabd36bfe",
+    "path": "data-dictionary/data-dictionary-2.1.0.qmd",
+    "note": "Per-table maturity badges only. The canonical CLIF repo's maturity.md tiers the project as a whole and does not label individual tables, so the website badge is the sole per-table beta/concept signal. Six tables carry a Concept badge while sitting under the website's 'Beta tables' heading; the badge is authoritative."
+  },
+  "note": "Columns, data types, permissible values, and foreign keys are parsed from the consortium's canonical CLIF 2.1 DDL. clifpy's schemas/2.1/*.yaml is the second canonical artifact and is cross-checked in the test suite, not merged.",
   "tables": {
     "adt": {
       "maturity": "beta",
+      "foreign_keys": [
+        {
+          "column": "hospitalization_id",
+          "references": "hospitalization.hospitalization_id"
+        }
+      ],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "hospital_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "hospital_type",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[academic, community, LTACH](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/adt/clif_adt_hospital_type.csv)"
         },
         {
           "name": "in_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "out_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "location_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "location_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[ed, ward, stepdown, icu, procedural, l&d, hospice, psych, rehab, radiology, dialysis, other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/adt/clif_adt_location_categories.csv)"
         },
         {
           "name": "location_type",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of ICU categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/adt/clif_adt_location_type.csv)"
+        }
+      ]
+    },
+    "clinical_trial": {
+      "maturity": null,
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "hospitalization_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "trial_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "trial_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "arm_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "consent_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
+        },
+        {
+          "name": "randomized_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
+        },
+        {
+          "name": "withdrawal_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         }
       ]
     },
     "code_status": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [
+        {
+          "column": "patient_id",
+          "references": "patient.patient_id"
+        }
+      ],
       "columns": [
         {
           "name": "patient_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "start_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "code_status_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "code_status_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[DNR, DNAR, UDNR, DNR/DNI, DNAR/DNI, AND, Full, Presume Full, Other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/tree/main/mCIDE/code_status/clif_code_status_categories.csv)"
         }
       ]
     },
     "crrt_therapy": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "device_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "crrt_mode_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "crrt_mode_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[scuf, cvvh, cvvhd, cvvhdf, avvh](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/crrt_therapy/clif_crrt_therapy_mode_categories.csv)"
         },
         {
           "name": "dialysis_machine_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "blood_flow_rate",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "[150-350](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_crrt_modes.csv)"
         },
         {
           "name": "pre_filter_replacement_fluid_rate",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "[0-10000](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_crrt_modes.csv)"
         },
         {
           "name": "post_filter_replacement_fluid_rate",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "[0-10000](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_crrt_modes.csv)"
         },
         {
           "name": "dialysate_flow_rate",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "[0-10000](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_crrt_modes.csv)"
         },
         {
           "name": "ultrafiltration_out",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "[0-500](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_crrt_modes.csv)"
         }
       ]
     },
     "ecmo_mcs": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "device_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "device_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of device categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/ecmo/clif_ecmo_mcs_groups.csv) and [outlier thresholds by device category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_ecmo_mcs.csv)"
         },
         {
           "name": "mcs_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of MCS groups in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/ecmo/clif_ecmo_mcs_groups.csv)"
         },
         {
-          "name": "device_metric_name",
-          "dtype": "VARCHAR"
+          "name": "ecmo_configuration_category",
+          "dtype": "VARCHAR",
+          "permissible": "vv, va, va_v, vv_a, etc."
         },
         {
-          "name": "device_rate",
-          "dtype": "DOUBLE"
+          "name": "control_parameter_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "control_parameter_category",
+          "dtype": "VARCHAR",
+          "permissible": "[List of control parameter categories in CLIF]()"
+        },
+        {
+          "name": "control_parameter_value",
+          "dtype": "FLOAT",
+          "permissible": "Numeric values"
         },
         {
           "name": "flow",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "Numeric values in L/min"
         },
         {
-          "name": "sweep",
-          "dtype": "DOUBLE"
+          "name": "sweep_set",
+          "dtype": "FLOAT",
+          "permissible": "Numeric values in L/min"
+        },
+        {
+          "name": "fdO2_set",
+          "dtype": "FLOAT",
+          "permissible": "Numeric values (0-1)"
         }
       ]
     },
     "hospital_diagnosis": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
-          "name": "patient_id",
-          "dtype": "VARCHAR"
+          "name": "hospitalization_id",
+          "dtype": "VARCHAR",
+          "permissible": "Must match a hospitalization_id in the hospitalization table"
         },
         {
-          "name": "diagnostic_code",
-          "dtype": "DOUBLE"
+          "name": "diagnosis_code",
+          "dtype": "VARCHAR",
+          "permissible": "Valid ICD-9-CM or ICD-10-CM code"
         },
         {
           "name": "diagnosis_code_format",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "ICD10CM or ICD9CM"
         },
         {
-          "name": "start_dttm",
-          "dtype": "DATETIME"
+          "name": "diagnosis_primary",
+          "dtype": "INT",
+          "permissible": "0, 1"
         },
         {
-          "name": "end_dttm",
-          "dtype": "DATETIME"
+          "name": "poa_present",
+          "dtype": "INT",
+          "permissible": "0, 1"
         }
       ]
     },
     "hospitalization": {
       "maturity": "beta",
+      "foreign_keys": [
+        {
+          "column": "patient_id",
+          "references": "patient.patient_id"
+        }
+      ],
       "columns": [
         {
           "name": "patient_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "hospitalization_joined_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "admission_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "discharge_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "age_at_admission",
-          "dtype": "INT"
+          "dtype": "INT",
+          "permissible": "No restriction"
         },
         {
           "name": "admission_type_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "e.g. Direct admission, Transfer, Pre-op surgical"
         },
         {
           "name": "admission_type_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of admission type categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/hospitalization/clif_hospitalization_admission_type_categories.csv)"
         },
         {
           "name": "discharge_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction, e.g. home"
         },
         {
           "name": "discharge_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[Home, Skilled Nursing Facility (SNF), Expired, Acute Inpatient Rehab Facility, Hospice, Long Term Care Hospital (LTACH), Acute Care Hospital, Group Home, Chemical Dependency, Against Medical Advice (AMA), Assisted Living, Still Admitted, Missing, Other, Psychiatric Hospital, Shelter, Jail](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/hospitalization/clif_hospitalization_discharge_categories.csv)"
         },
         {
           "name": "zipcode_nine_digit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "zipcode_five_digit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "census_block_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "census_block_group_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "census_tract",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "state_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "county_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "fips_version",
+          "dtype": "VARCHAR",
+          "permissible": "2000,2010, 2020"
         }
       ]
     },
     "intake_output": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "intake_dttm",
-          "dtype": "UNKNOWN"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "fluid_name",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "amount",
-          "dtype": "UNKNOWN"
+          "dtype": "DOUBLE",
+          "permissible": "Numeric values in mL"
         },
         {
           "name": "in_out_flag",
-          "dtype": "UNKNOWN"
+          "dtype": "INT",
+          "permissible": "0 = Output, 1 = Intake"
         }
       ]
     },
     "invasive_hemodynamics": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "measure_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Free text (e.g., Right Atrium)"
         },
         {
           "name": "measure_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[cvp, ra, rv, pa_systolic, pa_diastolic, pa_mean, pcwp, cardiac_output_thermodilution , cardiac_output_fick](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/invasive_hemodynamics/clif_invasive_hemodynamics_measure_categories.csv)"
+        },
+        {
+          "name": "measure_value",
+          "dtype": "DOUBLE",
+          "permissible": "Positive decimal values (e.g., 5.00, 25.65)"
         }
       ]
     },
     "key_icu_orders": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "order_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "order_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "order_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Under-development. Some examples include: [pt_evaluation, pt_treat, ot_evaluation, ot_treat](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/key_icu_orders/clif_key_icu_orders_categories.csv)"
         },
         {
           "name": "order_status_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "sent, completed"
         }
       ]
     },
     "labs": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "lab_order_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "lab_collect_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "lab_result_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "lab_order_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": ""
         },
         {
           "name": "lab_order_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": ""
         },
         {
           "name": "lab_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": ""
         },
         {
           "name": "lab_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of lab categories in CLIF](https://github.com/clif-consortium/CLIF/blob/main/mCIDE/labs/clif_lab_categories.csv)"
         },
         {
           "name": "lab_value",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": ""
         },
         {
           "name": "lab_value_numeric",
-          "dtype": "DOUBLE"
+          "dtype": "DOUBLE",
+          "permissible": "Numeric"
         },
         {
           "name": "reference_unit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Permissible reference values for each lab_category listed [here](https://github.com/clif-consortium/CLIF/blob/main/mCIDE/labs/clif_lab_categories.csv)"
         },
         {
           "name": "lab_specimen_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "lab_specimen_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": ""
         },
         {
           "name": "lab_loinc_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restrictions"
         }
       ]
     },
     "medication_admin_continuous": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_order_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "admin_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "med_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of continuous medication categories in CLIF](https://github.com/clif-consortium/CLIF/blob/main/mCIDE/medication_admin_continuous/clif_medication_admin_continuous_med_categories.csv) "
         },
         {
           "name": "med_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of continuous medication groups in CLIF](https://github.com/clif-consortium/CLIF/blob/main/mCIDE/medication_admin_continuous/clif_medication_admin_continuous_med_categories.csv)   "
         },
         {
           "name": "med_route_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "e.g. IV, enteral"
         },
         {
           "name": "med_route_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of continuous route categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_continuous/clif_medication_admin_continuous_med_route_categories.csv)"
         },
         {
           "name": "med_dose",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "Numeric"
         },
         {
           "name": "med_dose_unit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "mar_action_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "mar_action_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of continuous action categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_continuous/clif_medication_admin_continuous_action_categories.csv)"
+        },
+        {
+          "name": "mar_action_group",
+          "dtype": "VARCHAR",
+          "permissible": "[administered, not_administered, other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_continuous/clif_medication_admin_continuous_action_categories.csv)"
         }
       ]
     },
     "medication_admin_intermittent": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_order_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "admin_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "med_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of medication categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_intermittent/clif_medication_admin_intermittent_med_categories.csv)"
         },
         {
           "name": "med_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of medication groups in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_intermittent/clif_medication_admin_intermittent_med_categories.csv)"
         },
         {
           "name": "med_route_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "e.g. IV, enteral"
         },
         {
           "name": "med_route_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of intermittent route categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_intermittent/clif_medication_admin_intermittent_med_route_categories.csv)"
         },
         {
           "name": "med_dose",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "Numeric"
         },
         {
           "name": "med_dose_unit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "mar_action_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "mar_action_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of intermittent action categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_intermittent/clif_medication_admin_intermittent_action_categories.csv)"
+        },
+        {
+          "name": "mar_action_group",
+          "dtype": "VARCHAR",
+          "permissible": "[administered, not_administered, other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/medication_admin_intermittent/clif_medication_admin_intermittent_action_categories.csv)"
         }
-      ],
-      "alias_of": "medication_admin_continuous"
+      ]
     },
     "medication_orders": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_order_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "order_start_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "order_end_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "ordered_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "med_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Combined CDE of medication_admin_continuous and medication_admin_intermittent"
         },
         {
           "name": "med_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_order_status_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "med_order_status_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Under-development"
         },
         {
           "name": "med_route_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction. Examples include Oral, Intravenous"
         },
         {
           "name": "med_dose",
-          "dtype": "DOUBLE"
+          "dtype": "DOUBLE",
+          "permissible": "Numeric"
         },
         {
           "name": "med_dose_unit",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Examples include mg, mL, units"
         },
         {
           "name": "med_frequency",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Examples include Once Daily, Every 6 hours"
         },
         {
           "name": "prn",
-          "dtype": "BOOLEAN"
+          "dtype": "BOOLEAN",
+          "permissible": "0 = No, 1 = Yes"
         }
       ]
     },
     "microbiology_culture": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
+          "name": "patient_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "organism_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "order_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "collect_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "result_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "fluid_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction. [Check this file for examples](https://github.com/clif-consortium/CLIF/blob/main/mCIDE/mCIDE_mapping_examples/00_mCIDE_mapping_examples/clif_vocab_microbiology_culture_fluid_ucmc.csv)"
         },
         {
           "name": "fluid_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[CDE NIH Infection Site](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_culture/clif_microbiology_culture_fluid_category.csv)"
         },
         {
           "name": "method_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "method_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[culture, gram stain, smear](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_culture/clif_microbiology_culture_method_categories.csv)"
+        },
+        {
+          "name": "organism_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction."
         },
         {
           "name": "organism_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Organism species. [Check this file for examples](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_culture/clif_microbiology_culture_organism_categories.csv)."
         },
         {
           "name": "organism_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[CDE NIH Organism](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_culture/clif_microbiology_culture_organism_groups.csv)"
+        },
+        {
+          "name": "lab_loinc_code",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         }
       ]
     },
     "microbiology_nonculture": {
-      "maturity": "beta",
+      "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
+          "name": "patient_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
           "name": "hospitalization_id",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "result_dttm",
-          "dtype": "UNKNOWN"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "collect_dttm",
-          "dtype": "UNKNOWN"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "order_dttm",
-          "dtype": "UNKNOWN"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "fluid_name",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "component_category",
-          "dtype": "UNKNOWN"
+          "name": "fluid_category",
+          "dtype": "VARCHAR",
+          "permissible": "[CDE NIH Infection Site](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_nonculture/clif_microbiology_nonculture_fluid_category.csv)"
         },
         {
-          "name": "result_unit_category",
-          "dtype": "UNKNOWN"
+          "name": "method_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "method_category",
+          "dtype": "VARCHAR",
+          "permissible": "[pcr](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_nonculture/clif_microbiology_nonculture_method_category.csv)"
+        },
+        {
+          "name": "micro_order_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "organism_category",
+          "dtype": "VARCHAR",
+          "permissible": "Organism species. [Check this file for examples](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_nonculture/clif_microbiology_nonculture_organism_category.csv)."
+        },
+        {
+          "name": "organism_group",
+          "dtype": "VARCHAR",
+          "permissible": "[CDE NIH Organism](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_nonculture/clif_microbiology_nonculture_organism_category.csv)"
+        },
+        {
+          "name": "result_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "result_category",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "[Check list of result categories](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_nonculture/clif_microbiology_nonculture_result_category.csv)"
+        },
+        {
+          "name": "reference_low",
+          "dtype": "DOUBLE",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "reference_high",
+          "dtype": "DOUBLE",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "result_units",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "lab_loinc_code",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         }
       ]
     },
     "microbiology_susceptibility": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
-          "name": "culture_id",
-          "dtype": "VARCHAR"
+          "name": "organism_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "antibiotic",
-          "dtype": "VARCHAR"
+          "name": "antimicrobial_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "sensitivity",
-          "dtype": "VARCHAR"
+          "name": "antimicrobial_category",
+          "dtype": "VARCHAR",
+          "permissible": "[List of antimicrobial categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/microbiology_susceptibility/clif_microbiology_susceptibility_antibiotics_category.csv)"
         },
         {
-          "name": "mic",
-          "dtype": "DOUBLE"
+          "name": "sensitivity_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "susceptibility_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "susceptibility_category",
+          "dtype": "VARCHAR",
+          "permissible": "[susceptible, non susceptible, indeterminate, NA](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/tree/main/mCIDE/microbiology_susceptibility/clif_microbiology_susceptibility_category.csv)"
         }
       ]
     },
     "patient": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "patient_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "race_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "race_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[Black or African American, White, American Indian or Alaska Native, Asian, Native Hawaiian or Other Pacific Islander, Unknown, Other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient/clif_patient_race_categories.csv)"
         },
         {
           "name": "ethnicity_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "ethnicity_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[Hispanic, Non-Hispanic, Unknown](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient/clif_patient_ethnicity_categories.csv)"
         },
         {
           "name": "sex_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "sex_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[Male, Female, Unknown](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient/clif_patient_sex_categories.csv)"
         },
         {
           "name": "birth_date",
-          "dtype": "DATETIME"
+          "dtype": "DATE",
+          "permissible": "Date format should be YYYY-MM-DD"
         },
         {
           "name": "death_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "language_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Original string from the source data"
         },
         {
           "name": "language_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of language categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient/clif_patient_language_categories.csv)"
         }
       ]
     },
     "patient_assessments": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "assessment_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "assessment_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of permissible assessment categories in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient_assessments/clif_patient_assessment_categories.csv)"
         },
         {
           "name": "assessment_group",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[List of permissible assessment groups in CLIF](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/patient_assessments/clif_patient_assessment_categories.csv)"
         },
         {
           "name": "numerical_value",
-          "dtype": "DOUBLE"
+          "dtype": "DOUBLE",
+          "permissible": "Applicable for assessments with numerical outcomes (e.g., 0-10, 3-15)"
         },
         {
           "name": "categorical_value",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Applicable for assessments with categorical outcomes (e.g., Pass/Fail, Yes/No)"
         },
         {
           "name": "text_value",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Applicable for assessments requiring textual data"
+        }
+      ]
+    },
+    "patient_diagnosis": {
+      "maturity": null,
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "patient_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "hospitalization_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "diagnosis_code",
+          "dtype": "VARCHAR",
+          "permissible": "Valid ICD-10-CM code"
+        },
+        {
+          "name": "diagnosis_code_format",
+          "dtype": "VARCHAR",
+          "permissible": "ICD10CM"
+        },
+        {
+          "name": "source_type",
+          "dtype": "VARCHAR",
+          "permissible": "problem_list, medical_history, encounter_dx"
+        },
+        {
+          "name": "start_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
+        },
+        {
+          "name": "end_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         }
       ]
     },
     "patient_procedures": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "procedure_name",
-          "dtype": "VARCHAR"
+          "name": "billing_provider_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "procedure_category",
-          "dtype": "VARCHAR"
+          "name": "performing_provider_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
-          "name": "diagnosis",
-          "dtype": "VARCHAR"
+          "name": "procedure_code",
+          "dtype": "VARCHAR",
+          "permissible": "Valid CPT, ICD-10-PCS OR HCPCS code"
         },
         {
-          "name": "start_dttm",
-          "dtype": "DATETIME"
+          "name": "procedure_code_format",
+          "dtype": "VARCHAR",
+          "permissible": "CPT, ICD10PCS, HCPCS"
+        },
+        {
+          "name": "procedure_billed_dttm",
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
+        }
+      ]
+    },
+    "place_based_index": {
+      "maturity": null,
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "hospitalization_id",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "index_name",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
+        },
+        {
+          "name": "index_value",
+          "dtype": "DOUBLE",
+          "permissible": "Numeric"
+        },
+        {
+          "name": "index_version",
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         }
       ]
     },
     "position": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "position_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "position_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[prone, not_prone](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/tree/main/mCIDE/postion/clif_position_categories.csv)"
         }
       ]
     },
     "provider": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "provider_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "start_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "stop_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "provider_role_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "provider_role_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Under development"
         }
       ]
     },
     "respiratory_support": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00"
         },
         {
           "name": "device_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "device_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "device_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[IMV, NIPPV, CPAP, High Flow NC, Face Mask, Trach Collar, Nasal Cannula, Room Air, Other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/respiratory_support/clif_respiratory_support_device_categories.csv)"
         },
         {
           "name": "vent_brand_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "Optional"
         },
         {
           "name": "mode_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "mode_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[Assist Control-Volume Control, Pressure Control, Pressure-Regulated Volume Control, SIMV, Pressure Support/CPAP, Volume Support, Blow by, Other](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/respiratory_support/clif_respiratory_support_mode_categories.csv)"
         },
         {
           "name": "tracheostomy",
-          "dtype": "INT"
+          "dtype": "INT",
+          "permissible": "0 = No, 1 = Yes"
         },
         {
           "name": "fio2_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "lpm_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "tidal_volume_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "resp_rate_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "pressure_control_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "pressure_support_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "flow_rate_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "peak_inspiratory_pressure_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "inspiratory_time_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "peep_set",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction, see [Expected _set values for each device_category and mode_category](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/outlier-handling/outlier_thresholds_respiratory_support.csv)"
         },
         {
           "name": "tidal_volume_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "resp_rate_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "plateau_pressure_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "peak_inspiratory_pressure_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "peep_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "minute_vent_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         },
         {
           "name": "mean_airway_pressure_obs",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "No restriction"
         }
       ]
     },
     "therapy_details": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "session_start_dttm",
-          "dtype": "UNKNOWN"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "therapy_element_name",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "therapy_element_category",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "therapy_element_value",
-          "dtype": "UNKNOWN"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         }
       ]
     },
     "transfusion": {
       "maturity": "concept",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "transfusion_start_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "transfusion_end_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "component_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "E.g., Red Blood Cells, Plasma, Platelets"
         },
         {
           "name": "attribute_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "E.g., Leukocyte Reduced, Irradiated"
         },
         {
           "name": "volume_transfused",
-          "dtype": "DOUBLE"
+          "dtype": "DOUBLE",
+          "permissible": "Numeric, e.g., 300"
         },
         {
           "name": "volume_units",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "E.g., mL"
         },
         {
           "name": "product_code",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "E.g., E0382"
         }
       ]
     },
     "vitals": {
       "maturity": "beta",
+      "foreign_keys": [],
       "columns": [
         {
           "name": "hospitalization_id",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "recorded_dttm",
-          "dtype": "DATETIME"
+          "dtype": "DATETIME",
+          "permissible": "Datetime format should be YYYY-MM-DD HH:MM:SS+00:00 (UTC)"
         },
         {
           "name": "vital_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         },
         {
           "name": "vital_category",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "[temp_c, heart_rate, sbp, dbp, spo2, respiratory_rate, map, height_cm, weight_kg](https://github.com/Common-Longitudinal-ICU-data-Format/CLIF/blob/main/mCIDE/vitals/clif_vitals_categories.csv)"
         },
         {
           "name": "vital_value",
-          "dtype": "DOUBLE"
+          "dtype": "FLOAT",
+          "permissible": "temp_c = Celsius, height_cm = Centimeters, weight_kg = Kg, map = mmHg, spo2 = %. No unit for heart_rate, sbp, dbp, respiratory_rate"
         },
         {
           "name": "meas_site_name",
-          "dtype": "VARCHAR"
+          "dtype": "VARCHAR",
+          "permissible": "No restriction"
         }
       ]
     }
