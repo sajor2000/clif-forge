@@ -185,12 +185,12 @@ the conformance gate before anything is written; any validation failure exits
 nonzero and writes nothing.
 
 Output is one `clif_<table>_2.1_<maturity>.parquet` per CLIF table — `beta` or
-`concept` from that table's CLIF maturity badge — plus `_truth.parquet`, the
-latent acuity spine behind each encounter, which makes the dataset usable as a
-benchmark with free ground-truth labels. The spine is **not** a CLIF table and
-deliberately does not carry the `clif_` prefix: every `clif_*.parquet` in an output
-directory is a real CLIF 2.1 table, so `glob("clif_*.parquet")` is a safe way to
-load the dataset without picking up generator internals.
+`concept` from that table's CLIF maturity badge. Share packages are **exactly**
+those 25 website-badged tables (no extras). The latent acuity spine is
+generator-internal and is **not** written by default; pass `--write-truth` only
+when you need `_truth.parquet` for local benchmarking. The spine is **not** a
+CLIF table and deliberately does not carry the `clif_` prefix: every
+`clif_*.parquet` in a share directory is a real CLIF 2.1 table.
 
 **The id-type rule (hardcoded, applied to every dataset):** `patient_id`,
 `hospitalization_id`, and `hospitalization_joined_id` are always emitted as
@@ -255,7 +255,7 @@ whole-hospital population** — are too large to commit here. Download them dire
 
 > 📥 **Full datasets (Dropbox):**
 > [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0)
-> — each dataset folder includes a `CONTENTS.json` (per-table row counts + SHA-256) for post-download integrity checks.
+> — each dataset folder has **exactly 25** `clif_<table>_2.1_{beta|concept}.parquet` files plus `CONTENTS.json` (row counts + SHA-256). No `_truth` / `clif_truth`.
 
 They are also reproducible from a fitted pack on demand (see below), so the shared
 files and a local regeneration match by content hash.

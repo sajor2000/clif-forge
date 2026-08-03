@@ -345,7 +345,7 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
     assert code == 0
     assert (out / table_parquet_filename("patient")).exists()
     assert (out / table_parquet_filename("hospitalization")).exists()
-    assert (out / "_truth.parquet").exists()
+    assert not (out / "_truth.parquet").exists()
     written = {p.name for p in out.glob("clif_*.parquet")}
     assert table_parquet_filename("vitals") in written
     assert table_parquet_filename("provider") in written
@@ -354,10 +354,10 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
 def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path) -> None:
     """Nothing outside the CLIF 2.1.0 dictionary may claim a ``clif_`` filename.
 
-    The latent spine is the standing temptation here — it is generator internals,
-    not a CLIF table, so it ships as ``_truth.parquet``.
+    The latent spine is generator internals, not a CLIF table — share packages omit
+    it; when written it must be ``_truth.parquet``, never ``clif_truth``.
     """
-    write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path)
+    write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path, write_truth=True)
     emitted = {parse_table_from_stem(p.stem) for p in tmp_path.glob("clif_*.parquet")}
     assert None not in emitted
     assert emitted <= set(loader.dictionary_tables())
@@ -366,6 +366,8 @@ def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path)
     assert table_parquet_filename("vitals").removesuffix(".parquet") in stems
     assert table_parquet_filename("provider").removesuffix(".parquet") in stems
     assert (tmp_path / TRUTH_FILENAME).exists()
+    assert not (tmp_path / "clif_truth.parquet").exists()
+    assert not any("untiered" in p.name for p in tmp_path.glob("*.parquet"))
 
 
 def test_cli_ae6_two_runs_byte_identical(pack: ParamPack, tmp_path) -> None:

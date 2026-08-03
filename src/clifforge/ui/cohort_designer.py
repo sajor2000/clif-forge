@@ -329,9 +329,9 @@ st.divider()
 st.header("Generate & download")
 st.markdown(
     f"Generates the full **{spec.n:,}-encounter** dataset — one "
-    "`clif_<table>_2.1_<beta|concept>.parquet` per CLIF table, plus `_truth.parquet` "
-    "(ground-truth acuity spine, not a CLIF table) and a `manifest.json` "
-    "(recipe, seed, per-table content hashes)."
+    "`clif_<table>_2.1_<beta|concept>.parquet` per CLIF table (share layout: "
+    "exactly the 25 website-badged tables; no `_truth.parquet`) and a "
+    "`manifest.json` (recipe, seed, per-table content hashes)."
 )
 if spec.n > 15_000:
     st.info(

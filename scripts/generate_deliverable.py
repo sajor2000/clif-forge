@@ -50,7 +50,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate.filenames import is_deliverable_table, table_parquet_filename
-from clifforge.generate.orchestrator import TRUTH_FILENAME, generate_dataset
+from clifforge.generate.orchestrator import generate_dataset
 from clifforge.generate.populations import (
     CHICAGO_ETHNICITY_TARGET,
     derive_chicago_population,
@@ -163,14 +163,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             (parts / name).mkdir(exist_ok=True)
             frame.write_parquet(parts / name / f"chunk_{c:03d}.parquet")
-        (parts / "truth").mkdir(exist_ok=True)
-        ds.truth.write_parquet(parts / "truth" / f"chunk_{c:03d}.parquet")
         table_names = [n for n in ds.tables if is_deliverable_table(n)]
         print(f"chunk {c + 1}/{n_chunks} ({min((c + 1) * chunk, args.n):,}/{args.n:,})", flush=True)
 
     total = 0
-    for name in [*table_names, "truth"]:
-        dst = out / (TRUTH_FILENAME if name == "truth" else table_parquet_filename(name))
+    for name in table_names:
+        dst = out / table_parquet_filename(name)
         pl.scan_parquet(str(parts / name / "*.parquet")).sink_parquet(dst)
         rows = pl.scan_parquet(dst).select(pl.len()).collect().item()
         total += rows

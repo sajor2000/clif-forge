@@ -369,12 +369,13 @@ def write_dataset(
     dataset: GeneratedDataset,
     out_dir: str | Path,
     *,
-    write_truth: bool = True,
+    write_truth: bool = False,
 ) -> list[Path]:
     """Write deliverable CLIF tables as ``clif_<table>_2.1_{beta|concept}.parquet``.
 
     Tables without a website beta/concept badge are generated in memory but
-    omitted from disk. Optionally writes ``_truth.parquet``.
+    omitted from disk. Optionally writes ``_truth.parquet`` (generator-internal;
+    not a CLIF table — omit from share packages).
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -400,7 +401,7 @@ def generate_streaming(
     seed: int = 42,
     id_offset: int = 0,
     chunk_size: int = 10_000,
-    write_truth: bool = True,
+    write_truth: bool = False,
 ) -> list[Path]:
     """Generate a large cohort with bounded memory, writing directly to ``out_dir``.
 
@@ -409,10 +410,10 @@ def generate_streaming(
     seed and id regardless of ``chunk_size`` (see :func:`_generate_frames`) — but
     only ``chunk_size`` encounters are ever held in memory at once. Each batch is
     gated and written to a per-table part file; the parts are then streamed into one
-    ``clif_<table>_2.1_{beta|concept}.parquet`` each (plus ``_truth.parquet``) and
-    removed. Untiered tables are skipped at write time. ``chunk_size`` is the
+    ``clif_<table>_2.1_{beta|concept}.parquet`` each (plus optional ``_truth.parquet``)
+    and removed. Untiered tables are skipped at write time. ``chunk_size`` is the
     memory dial: smaller uses less RAM (and runs a touch slower). Returns the
-    written paths.
+    written paths. Share packages should leave ``write_truth=False``.
     """
     if n_patients <= 0:
         raise ValueError("n_patients must be a positive integer")
