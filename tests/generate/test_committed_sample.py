@@ -28,7 +28,21 @@ pytestmark = pytest.mark.skipif(
 _N = 30
 
 
-def _compare(sample_dir: Path) -> None:
+def _recipe_base_pack(sample_dir: Path) -> Path | None:
+    """Resolve the pack the sample was generated from, or None if it is unavailable.
+
+    Committed samples may point at a local fitted pack under ``data/param_packs/``
+    (gitignored). CI and fresh clones only have ``base_pack/``, so the
+    byte-for-byte recipe check is skip-friendly when that pack is absent.
+    """
+    spec = load_spec(sample_dir / "spec.toml")
+    base_path = Path(spec.base_pack) if spec.base_pack else _BASE
+    if not (base_path / "manifest.json").is_file():
+        return None
+    return base_path
+
+
+def _compare(sample_dir: Path, base_path: Path) -> None:
     """Assert every deliverable table of the committed sample reproduces from its recipe.
 
     Checking *every* deliverable table matters: an earlier version of this test
@@ -37,7 +51,6 @@ def _compare(sample_dir: Path) -> None:
     generated in memory but omitted from deliverable parquet.
     """
     spec = load_spec(sample_dir / "spec.toml")
-    base_path = Path(spec.base_pack) if spec.base_pack else _BASE
     pack = spec_to_pack(spec, ParamPack.load(str(base_path)))
     regenerated = generate_dataset(pack, n_patients=_N, seed=spec.seed).tables
 
@@ -74,7 +87,10 @@ def _compare(sample_dir: Path) -> None:
 
 
 def test_committed_sample_reproduces_from_its_recipe() -> None:
-    _compare(_SAMPLE)
+    base_path = _recipe_base_pack(_SAMPLE)
+    if base_path is None:
+        pytest.skip("sample recipe pack not present (local fitted pack)")
+    _compare(_SAMPLE, base_path)
 
 
 @pytest.mark.skipif(
@@ -83,4 +99,7 @@ def test_committed_sample_reproduces_from_its_recipe() -> None:
 )
 def test_committed_full_hospital_sample_reproduces_from_its_recipe() -> None:
     """Same contract as the ICU sample, through the ``mode = "full_hospital"`` spec path."""
-    _compare(_FULL_SAMPLE)
+    base_path = _recipe_base_pack(_FULL_SAMPLE)
+    if base_path is None:
+        pytest.skip("sample recipe pack not present (local fitted pack)")
+    _compare(_FULL_SAMPLE, base_path)

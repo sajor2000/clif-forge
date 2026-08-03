@@ -1,9 +1,10 @@
-"""Tests for the Tier 6 prior-driven Concept tables (U20; R5/R14/R22).
+"""Tests for the Tier 6 Concept tables (U20; R5/R14/R22).
 
-Six tables with no fitted block, generated from documented literature/clinical
-rates keyed to spine acuity. Each is checked for its acuity coupling, exact mCIDE
-membership where the dictionary defines it, conformance-gate pass, and seed
-reproducibility. A provenance check confirms all six are marked prior-driven.
+Six tables generated from documented literature/clinical rates or dashboard
+priors keyed to spine acuity (some later promoted to fitted when a source pack
+block exists). Each is checked for its acuity coupling, exact mCIDE membership
+where the dictionary defines it, conformance-gate pass, and seed reproducibility.
+A provenance check confirms each is labeled fitted or dashboard-prior.
 """
 
 from __future__ import annotations
@@ -76,10 +77,27 @@ def test_ecmo_deterministic_and_gates() -> None:
     assert gate.validate(ecmo_mcs_frame(a), "ecmo_mcs", run_secondary=False).pandera_passed
 
 
+def _hemo_with_catheter(
+    levels: list[int],
+    pack: ParamPack,
+    *,
+    cv: bool = True,
+    hid: str = "H0",
+) -> list:
+    """Draw until the stay-level PA-catheter prevalence gate accepts a stay."""
+    for seed in range(200):
+        rows = sample_invasive_hemodynamics(
+            _spine(levels, cv=cv, hid=hid), pack, np.random.default_rng(seed)
+        )
+        if rows:
+            return rows
+    return []
+
+
 # --- invasive_hemodynamics --------------------------------------------------- #
 def test_hemodynamics_only_during_cv_failure() -> None:
     pack = _pack()
-    shock = sample_invasive_hemodynamics(_spine([4] * 12, cv=True), pack, np.random.default_rng(0))
+    shock = _hemo_with_catheter([4] * 12, pack, cv=True)
     stable = sample_invasive_hemodynamics(
         _spine([4] * 12, cv=False), pack, np.random.default_rng(0)
     )
@@ -89,7 +107,7 @@ def test_hemodynamics_only_during_cv_failure() -> None:
 def test_hemodynamics_categories_and_gate() -> None:
     pack = _pack()
     ok = set(categories("invasive_hemodynamics", "measure_category"))
-    rows = sample_invasive_hemodynamics(_spine([4] * 30, cv=True), pack, np.random.default_rng(0))
+    rows = _hemo_with_catheter([4] * 30, pack, cv=True)
     assert rows and all(r.measure_category in ok for r in rows)
     assert gate.validate(
         invasive_hemodynamics_frame(rows), "invasive_hemodynamics", run_secondary=False
@@ -103,7 +121,7 @@ def test_hemodynamics_records_what_was_measured() -> None:
     not usable for anything, which is what this table used to emit.
     """
     pack = _pack()
-    rows = sample_invasive_hemodynamics(_spine([4] * 60, cv=True), pack, np.random.default_rng(1))
+    rows = _hemo_with_catheter([4] * 60, pack, cv=True)
     assert rows
     for row in rows:
         spans = [ih._RANGES[p][row.measure_category] for p in ih._RANGES]
@@ -171,7 +189,8 @@ def test_key_icu_orders_categories_and_subset() -> None:
         with_orders += bool(rows)
         for r in rows:
             assert r.order_category in ok
-    assert 0.4 < with_orders / 400 < 0.6  # ~half of ICU stays get a rehab consult
+    # Dashboard prior: ~35% of ICU stays get a rehab consult (± sampling noise).
+    assert 0.25 < with_orders / 400 < 0.45
 
 
 def test_key_icu_orders_starts_with_evaluation_and_gates() -> None:
@@ -230,18 +249,20 @@ def test_provider_covers_every_stay() -> None:
 
 
 # --- provenance -------------------------------------------------------------- #
-def test_provenance_marks_all_tier6_prior_driven() -> None:
+def test_provenance_marks_all_tier6_tables() -> None:
+    """Tier-6 Concept tables are fitted (when a source block exists) or dashboard-prior."""
     text = pathlib.Path("PROVENANCE.md").read_text(encoding="utf-8")
-    for table in (
-        "ecmo_mcs",
-        "invasive_hemodynamics",
-        "transfusion",
-        "key_icu_orders",
-        "therapy_details",
-        "provider",
-    ):
+    expected = {
+        "ecmo_mcs": "fitted",
+        "invasive_hemodynamics": "dashboard-prior",
+        "transfusion": "dashboard-prior",
+        "key_icu_orders": "dashboard-prior",
+        "therapy_details": "dashboard-prior",
+        "provider": "dashboard-prior",
+    }
+    for table, label in expected.items():
         line = next(ln for ln in text.splitlines() if ln.startswith(f"| `{table}`"))
-        assert "prior-driven" in line
+        assert label in line, f"{table}: expected {label!r} in {line!r}"
 
 
 def test_all_tier6_datetimes_are_tz_aware() -> None:
@@ -250,9 +271,7 @@ def test_all_tier6_datetimes_are_tz_aware() -> None:
     frames = {
         "ecmo_mcs": (ecmo_mcs_frame(sample_ecmo_mcs(_spine([5] * 4), pack, rng)), "recorded_dttm"),
         "invasive_hemodynamics": (
-            invasive_hemodynamics_frame(
-                sample_invasive_hemodynamics(_spine([4] * 12, cv=True), pack, rng)
-            ),
+            invasive_hemodynamics_frame(_hemo_with_catheter([4] * 12, pack, cv=True)),
             "recorded_dttm",
         ),
         "provider": (provider_frame(sample_provider(_spine([3] * 8), pack, rng)), "start_dttm"),
