@@ -15,6 +15,7 @@ clif-forge generate --preset high-acuity --preview
 | `high-acuity` | A sicker ICU cohort | invasive ventilation 0.55, vasopressors 0.45, mortality ×1.4 |
 | `older-cohort` | An older population | age shifted +10 years |
 | `sepsis-heavy` | A sepsis-weighted cohort | vasopressors 0.50, CRRT 0.06, mortality ×1.3 |
+| `rare-support` | Teaching rare events | ECMO stay 0.08, CRRT|renal 0.55, IMV 0.50 — **not** network rates |
 
 To build your own, start from any preset (or a blank spec) and change the
 `[demographics]` / `[rates]` fields — see **What's tweakable** in the root

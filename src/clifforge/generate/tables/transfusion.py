@@ -2,33 +2,28 @@
 
 Blood-product transfusions concentrate in sicker patients, so a documented base
 rate is scaled by the spine's peak acuity (``peak_level``) into a small Poisson
-count per stay. Component, volume, and product code use documented adult
-transfusion norms (R15 — prior-driven, marked in ``PROVENANCE.md``); the vendored
-2.1.0 dictionary leaves the component/attribute columns free text (no mCIDE list),
-so realistic strings are used. ``transfusion_end_dttm`` follows the start. The
-spine supplies only acuity (KTD-6); reproducible under a fixed ``rng`` (R22).
+count per stay. When a fitted pack block is present, stay prevalence / component
+marginals / volume edges win; otherwise dashboard + adult-product norms apply.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["TransfusionRow", "sample_transfusion", "transfusion_frame"]
 
-#: Expected transfusions for a peak-acuity (level 5) stay; scaled down by acuity.
-#: Anchored so a mid-acuity stay lands near the dashboard-prior stay rate.
 _TRANSFUSION_BASE_RATE = _DASH_RATES["transfusion"] * 5.0
-#: (component_name, typical volume mL) — documented adult product norms.
 _COMPONENT_MARGINAL = {"RBC": 0.6, "FFP": 0.25, "Platelets": 0.15}
 _COMPONENT_VOLUME = {"RBC": 300.0, "FFP": 250.0, "Platelets": 300.0}
 _VOLUME_UNITS = "mL"
@@ -49,6 +44,18 @@ class TransfusionRow:
     product_code: str
 
 
+def _draw_volume(params: dict[str, Any], component: str, rng: np.random.Generator) -> float:
+    edges = params.get("volume_transfused_quantile_bin_edges")
+    if isinstance(edges, list) and len(edges) >= 2:
+        i = int(rng.integers(0, len(edges) - 1))
+        a, b = float(edges[i]), float(edges[i + 1])
+        if a > b:
+            a, b = b, a
+        return round(float(a if a == b else rng.uniform(a, b)), 1)
+    base = _COMPONENT_VOLUME.get(component, 300.0)
+    return round(base * float(rng.uniform(0.85, 1.1)), 1)
+
+
 def sample_transfusion(
     spine: SpineFrame,
     pack: ParamPack,
@@ -63,11 +70,26 @@ def sample_transfusion(
     if los_hours <= 0:
         return []
 
-    lam = _TRANSFUSION_BASE_RATE * (spine.peak_level / 5.0)
+    params = pack_table_params(pack, "transfusion")
+    gated = "stay_prevalence" in params
+    if gated:
+        if rng.random() >= float(params["stay_prevalence"]):
+            return []
+        lam = max(0.5, float(params.get("events_per_positive_stay", 1.5)))
+    else:
+        lam = _TRANSFUSION_BASE_RATE * (spine.peak_level / 5.0)
+
+    component_marginal = params.get("component_name_marginal")
+    if not isinstance(component_marginal, dict) or not component_marginal:
+        component_marginal = _COMPONENT_MARGINAL
+
+    # After a stay-level gate, Poisson must be zero-truncated so prevalence is honored.
     n = int(rng.poisson(lam))
+    if gated:
+        n = max(1, n)
     rows: list[TransfusionRow] = []
     for k in range(n):
-        component = categorical(_COMPONENT_MARGINAL, rng)
+        component = categorical(component_marginal, rng)
         start = admit_dttm + timedelta(hours=float(rng.random()) * los_hours)
         end = start + timedelta(hours=float(rng.uniform(1.0, 3.0)))
         rows.append(
@@ -76,9 +98,7 @@ def sample_transfusion(
                 transfusion_start_dttm=start,
                 transfusion_end_dttm=end,
                 component_name=component,
-                volume_transfused=round(
-                    _COMPONENT_VOLUME[component] * float(rng.uniform(0.85, 1.1)), 1
-                ),
+                volume_transfused=_draw_volume(params, component, rng),
                 volume_units=_VOLUME_UNITS,
                 product_code=f"{component[:3].upper()}-{hid}-{k}",
             )

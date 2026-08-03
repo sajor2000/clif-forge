@@ -41,6 +41,14 @@ def test_no_command_prints_help_and_exits_zero(capsys: pytest.CaptureFixture[str
     assert "generate" in out and "fit" in out
 
 
+def test_presets_lists_shipped_names(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(["presets"])
+    out = capsys.readouterr().out.strip().splitlines()
+    assert rc == 0
+    assert "high-acuity" in out
+    assert "rare-support" in out
+
+
 def test_generate_requires_out_unless_preview(capsys: pytest.CaptureFixture[str]) -> None:
     # --out is optional at the parser level (so --preview can dry-run), but a real
     # generation still requires it.

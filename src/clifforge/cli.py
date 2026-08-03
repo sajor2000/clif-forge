@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="CLIFForge — generate fully synthetic CLIF 2.1 ICU datasets.",
     )
     parser.add_argument("--version", action="version", version=f"clif-forge {__version__}")
-    sub = parser.add_subparsers(dest="command", metavar="{generate,init,ui,fit}")
+    sub = parser.add_subparsers(dest="command", metavar="{generate,init,ui,fit,presets}")
 
     generate = sub.add_parser(
         "generate", help="Generate a synthetic CLIF 2.1 dataset (offline, no real data)."
@@ -116,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     ui = sub.add_parser("ui", help="Launch the Cohort Designer web app (requires the 'ui' extra).")
     ui.add_argument(
         "--port", type=int, default=8501, help="Port for the Streamlit server (default 8501)."
+    )
+
+    sub.add_parser(
+        "presets",
+        help="List shipped variant preset names (usable with generate --preset).",
     )
 
     return parser
@@ -310,6 +315,19 @@ def _run_ui(args: argparse.Namespace) -> int:
         return subprocess.call(cmd, env=env)
 
 
+def _run_presets(_args: argparse.Namespace) -> int:
+    """Print shipped preset names one per line."""
+    from clifforge.variants import list_presets
+
+    names = list_presets()
+    if not names:
+        print("clif-forge presets: no shipped presets found", file=sys.stderr)
+        return 1
+    for name in names:
+        print(name)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point. Returns a process exit code (0 = success)."""
     parser = build_parser()
@@ -331,6 +349,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_init(args)
     if args.command == "ui":
         return _run_ui(args)
+    if args.command == "presets":
+        return _run_presets(args)
 
     parser.print_help()
     return 0

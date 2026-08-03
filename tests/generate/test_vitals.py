@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import polars as pl
+import pytest
 
 from clifforge.conformance import gate
 from clifforge.fit.param_pack import ParamPack
@@ -220,3 +221,31 @@ def test_missing_vitals_block_raises() -> None:
 
 def test_module_exports() -> None:
     assert set(vitals.__all__) == {"VITALS", "VitalObservation", "sample_vitals", "vitals_frame"}
+
+
+def test_hemodynamic_innovations_are_cross_correlated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HR and SBP residual series co-move more than independent noise would."""
+    monkeypatch.setattr(vitals, "_EMIT_PROB_ICU", 1.0)
+    monkeypatch.setattr(vitals, "_EMIT_PROB_WARD", 1.0)
+    pack = _pack()
+    levels = [2] * 120
+    obs = sample_vitals(_spine(levels, hid="Hc", cv=False), pack, np.random.default_rng(7))
+    frame = vitals_frame(obs).with_columns(
+        pl.col("recorded_dttm").dt.truncate("1h").alias("hour")
+    )
+    wide = (
+        frame.filter(pl.col("vital_category").is_in(["heart_rate", "sbp"]))
+        .pivot(
+            on="vital_category",
+            index="hour",
+            values="vital_value",
+            aggregate_function="first",
+        )
+        .drop_nulls()
+        .sort("hour")
+    )
+    assert wide.height > 40
+    dhr = np.diff(wide["heart_rate"].to_numpy())
+    dsbp = np.diff(wide["sbp"].to_numpy())
+    corr = float(np.corrcoef(dhr, dsbp)[0, 1])
+    assert corr > 0.25

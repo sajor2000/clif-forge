@@ -72,7 +72,14 @@ _KNOWN_TOP = {"name", "n", "seed", "base_pack", "mode", "demographics", "rates"}
 #: Population modes: ICU network-median, full hospital, or fitted empirical ICU.
 _KNOWN_MODES = {"icu", "full_hospital", "fitted_icu"}
 _KNOWN_DEMOGRAPHICS = {"age_shift", "hispanic_frac", "race_target"}
-_KNOWN_RATES = {"imv", "mortality_scale", "vaso_frac", "crrt_prob", "prone_severe"}
+_KNOWN_RATES = {
+    "imv",
+    "mortality_scale",
+    "vaso_frac",
+    "crrt_prob",
+    "prone_severe",
+    "ecmo_stay",
+}
 
 
 @dataclass(frozen=True)
@@ -97,6 +104,8 @@ class VariantSpec:
     vaso_frac: float = 0.27
     crrt_prob: float = 0.29
     prone_severe: float = 0.026
+    #: Optional ECMO stay prevalence override (None = leave pack / network default).
+    ecmo_stay: float | None = None
 
 
 class SpecError(ValueError):
@@ -124,6 +133,8 @@ def _validate(spec: VariantSpec) -> None:
     _unit(spec.vaso_frac, "rates.vaso_frac")
     _unit(spec.crrt_prob, "rates.crrt_prob")
     _unit(spec.prone_severe, "rates.prone_severe")
+    if spec.ecmo_stay is not None:
+        _unit(spec.ecmo_stay, "rates.ecmo_stay")
     if spec.mortality_scale <= 0:
         raise SpecError(f"rates.mortality_scale must be positive, got {spec.mortality_scale}")
     if spec.hispanic_frac is not None:
@@ -151,6 +162,9 @@ def _parse(data: dict[str, Any]) -> VariantSpec:
         vaso_frac=float(rates.get("vaso_frac", defaults.vaso_frac)),
         crrt_prob=float(rates.get("crrt_prob", defaults.crrt_prob)),
         prone_severe=float(rates.get("prone_severe", defaults.prone_severe)),
+        ecmo_stay=(
+            float(rates["ecmo_stay"]) if "ecmo_stay" in rates else defaults.ecmo_stay
+        ),
     )
     _validate(spec)
     return spec
@@ -216,7 +230,17 @@ def spec_to_pack(
         return recalibrate_to_full_hospital(derived, crrt_prob=spec.crrt_prob)
     if spec.mode == "fitted_icu":
         # Fitted all-28 pack + validated ICU recalibrate (IMV/mort/NIV/ADT arrivals).
-        return recalibrate_fitted_icu(derived)
+        out = recalibrate_fitted_icu(derived)
+        if spec.ecmo_stay is not None:
+            tables = dict(out.tables)
+            ecmo = dict(tables.get("ecmo_mcs", {}))
+            ecmo_params = dict(ecmo.get("params", {}))
+            ecmo_params["stay_prevalence"] = float(spec.ecmo_stay)
+            ecmo_params["min_support_level"] = 4
+            ecmo["params"] = ecmo_params
+            tables["ecmo_mcs"] = ecmo
+            return ParamPack(manifest=dict(out.manifest), tables=tables)
+        return out
     return recalibrate_to_network_median(
         derived,
         peak_imv_target=spec.imv,
@@ -224,4 +248,5 @@ def spec_to_pack(
         flag_target_prevalence=flags,
         crrt_prob=spec.crrt_prob,
         prone_prob_severe=spec.prone_severe,
+        ecmo_stay=spec.ecmo_stay,
     )

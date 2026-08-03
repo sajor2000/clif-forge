@@ -59,3 +59,11 @@ def test_presets_move_the_illness_rates() -> None:
         )
 
     assert imv(hi) > imv(base) + 0.1  # meaningfully higher ventilation
+
+
+def test_rare_support_emits_ecmo_at_small_n() -> None:
+    """Teaching preset elevates ECMO so n=1000 is non-empty (unlike network median)."""
+    ds = _generate("rare-support", n=1000, seed=11)
+    assert ds["ecmo_mcs"].height > 0
+    assert ds["crrt_therapy"].height > 0
+    assert ds["ecmo_mcs"]["hospitalization_id"].n_unique() >= 1

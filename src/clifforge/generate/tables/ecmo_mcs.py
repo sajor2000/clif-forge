@@ -30,7 +30,7 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 
@@ -90,11 +90,11 @@ def sample_ecmo_mcs(
     """Emit ECMO/MCS rows during the highest-acuity (ECMO-tier) intervals (R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     grid_step = grid_step_hours(pack)
-    block = pack.tables.get("ecmo_mcs", {})
-    params = block.get("params", {}) if isinstance(block, dict) else {}
+    params = pack_table_params(pack, "ecmo_mcs")
     if "stay_prevalence" in params and rng.random() >= float(params["stay_prevalence"]):
         return []
 
+    min_level = int(params.get("min_support_level", _ECMO_MIN_SUPPORT_LEVEL))
     device_marginal = params.get("device_category_marginal")
     mcs_marginal = params.get("mcs_group_marginal")
 
@@ -110,7 +110,7 @@ def sample_ecmo_mcs(
 
     rows: list[EcmoRow] = []
     for idx, level in enumerate(spine.support_level):
-        if level < _ECMO_MIN_SUPPORT_LEVEL:
+        if level < min_level:
             continue
         device = (
             categorical(device_marginal, rng)

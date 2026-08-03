@@ -57,6 +57,20 @@ _SHOCK_PHYSIOLOGY_LEVEL = 4  # vaso-tier MAP when cv_flag is on
 _RESP_VITALS = frozenset({"spo2", "respiratory_rate"})
 _RESP_PHYSIOLOGY_LEVEL = 3
 
+#: Cross-vital residual correlation among hemodynamic innovations (non-shock
+#: co-movement). Order matches ``_HEMO_ORDER``. Shock mean-shifts still come from
+#: shared state selection; this only couples the AR(1) noise.
+_HEMO_ORDER = ("heart_rate", "sbp", "dbp", "map")
+_HEMO_INNOVATION_CORR = np.array(
+    [
+        [1.00, 0.35, 0.30, 0.35],
+        [0.35, 1.00, 0.85, 0.90],
+        [0.30, 0.85, 1.00, 0.88],
+        [0.35, 0.90, 0.88, 1.00],
+    ],
+    dtype=float,
+)
+
 
 #: Per-interval probability that a vital is observed. Un-fitted cadence heuristics
 #: (like the adt hospital constants): dense but not certain in the ICU, sparse on
@@ -123,13 +137,32 @@ def sample_vitals(
     """Emit one hospitalization's observed vitals as a long list of rows (R9, R22).
 
     For each fitted vital an AR(1) walk advances over every grid interval using
-    per-``support_level`` params; each interval is emitted with an ICU/ward-
-    dependent probability at a jittered sub-interval timestamp, clamped into the
-    outlier bounds. ``hospitalization_id`` defaults to the spine's own id.
+    per-``support_level`` params; hemodynamic vitals share correlated innovations
+    so HR↔BP co-move. Each interval is emitted with an ICU/ward-dependent
+    probability at a jittered sub-interval timestamp, clamped into the outlier
+    bounds. ``hospitalization_id`` defaults to the spine's own id.
     """
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     grid_step = grid_step_hours(pack)
     params = _vitals_params(pack)
+    n_intervals = len(spine.support_level)
+
+    # Optional pack residual correlation for hemodynamic innovations.
+    corr = params.get("hemo_innovation_correlation")
+    if isinstance(corr, list) and len(corr) == 4:
+        hemo_corr = np.asarray(corr, dtype=float)
+    else:
+        hemo_corr = _HEMO_INNOVATION_CORR
+    try:
+        hemo_chol = np.linalg.cholesky(hemo_corr + 1e-9 * np.eye(4))
+    except np.linalg.LinAlgError:
+        hemo_chol = np.eye(4)
+
+    # Isolate hemo innovations so adding correlation does not cascade the
+    # encounter RNG stream used by emit/jitter (and later tables).
+    hemo_rng = rng.spawn(1)[0]
+    hemo_noise = (hemo_chol @ hemo_rng.standard_normal((4, n_intervals))).T
+    hemo_idx = {name: i for i, name in enumerate(_HEMO_ORDER)}
 
     observations: list[VitalObservation] = []
     for vital in VITALS:
@@ -163,10 +196,14 @@ def sample_vitals(
             state = _state_params(by_state, phys_level)
             mean, phi, sigma = state["mean"], state["phi"], state["sigma"]
             mean = mean + mean_shift
-            if value is None:
+            if vital in hemo_idx:
+                innov = float(hemo_noise[interval_idx, hemo_idx[vital]])
+            else:
+                innov = float(rng.standard_normal())
+            if value is None:  # noqa: SIM108 — warm-start vs AR(1) step is clearer as a block
                 value = mean  # warm-start at the state mean
             else:
-                value = mean + phi * (value - mean) + sigma * float(rng.standard_normal())
+                value = mean + phi * (value - mean) + sigma * innov
             value = min(max(value, lower), upper)  # clamp into outlier bounds (R9)
 
             is_icu = level >= ICU_MIN_SUPPORT_LEVEL

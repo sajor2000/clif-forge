@@ -37,7 +37,7 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
@@ -133,7 +133,13 @@ def sample_invasive_hemodynamics(
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     if not any(spine.cv_flag):
         return []
-    if rng.random() >= _CV_CONDITIONAL_PREVALENCE:
+    params = pack_table_params(pack, "invasive_hemodynamics")
+    if "stay_prevalence" in params:
+        stay_prev = float(params["stay_prevalence"])
+        cv_cond = min(1.0, stay_prev / _CV_STAY_SHARE)
+    else:
+        cv_cond = _CV_CONDITIONAL_PREVALENCE
+    if rng.random() >= cv_cond:
         return []
     grid_step = grid_step_hours(pack)
     intervals = _measure_intervals(spine.cv_flag, grid_step)
@@ -144,17 +150,31 @@ def sample_invasive_hemodynamics(
     # pump and a vasodilated circulation from one measurement to the next.
     phenotype = categorical(_PHENOTYPE_MARGINAL, rng)
     ranges = _RANGES[phenotype]
+    measure_marginal = params.get("measure_category_marginal")
+    if not isinstance(measure_marginal, dict) or not measure_marginal:
+        measure_marginal = _MEASURE_MARGINAL
 
     rows: list[HemodynamicRow] = []
     for idx in intervals:
-        measure = categorical(_MEASURE_MARGINAL, rng)
-        lo, hi = ranges[measure]
+        measure = categorical(measure_marginal, rng)
+        if measure not in ranges:
+            measure = categorical(_MEASURE_MARGINAL, rng)
+        edges = params.get(f"{measure}_quantile_bin_edges")
+        if isinstance(edges, list) and len(edges) >= 2:
+            i = int(rng.integers(0, len(edges) - 1))
+            a, b = float(edges[i]), float(edges[i + 1])
+            if a > b:
+                a, b = b, a
+            value = float(a if a == b else rng.uniform(a, b))
+        else:
+            lo, hi = ranges[measure]
+            value = float(rng.uniform(lo, hi))
         rows.append(
             HemodynamicRow(
                 hospitalization_id=hid,
                 recorded_dttm=admit_dttm + timedelta(hours=idx * grid_step),
                 measure_category=measure,
-                measure_value=round(float(rng.uniform(lo, hi)), 1),
+                measure_value=round(value, 1),
             )
         )
     return rows

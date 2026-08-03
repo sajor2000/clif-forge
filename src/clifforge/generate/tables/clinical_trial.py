@@ -32,7 +32,7 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
@@ -87,18 +87,27 @@ def sample_clinical_trial(
     los_hours = spine.n_intervals * grid_step_hours(pack)
     if los_hours <= 0 or spine.peak_level < _MIN_SUPPORT_LEVEL:
         return []
-    if rng.random() >= _ENROLMENT_PROB:
+    params = pack_table_params(pack, "clinical_trial")
+    # Peak gate above defines eligibility. Enrolment must be among-eligible:
+    # prefer fitted eligible_conditional_prevalence; never apply unconditional
+    # stay_prevalence here (that would double-gate). Dashboard prior is already
+    # among ventilated by convention.
+    enrol = float(params.get("eligible_conditional_prevalence", _ENROLMENT_PROB))
+    if rng.random() >= enrol:
         return []
 
-    trial_id = categorical(_TRIAL_MARGINAL, rng)
+    # Always use synthetic trial IDs — never emit real NCT strings from a fit.
+    trial_marginal = _TRIAL_MARGINAL
+    trial_id = categorical(trial_marginal, rng)
     name, arms = _TRIALS[trial_id]
+    withdrawal_prob = float(params.get("withdrawal_prob", _WITHDRAWAL_PROB))
 
     consent = admit_dttm + timedelta(
         hours=float(rng.random()) * min(los_hours, _CONSENT_WINDOW_HOURS)
     )
     randomized = consent + timedelta(hours=float(rng.uniform(*_CONSENT_TO_RANDOM_HOURS)))
     withdrawal = None
-    if rng.random() < _WITHDRAWAL_PROB:
+    if rng.random() < withdrawal_prob:
         # Withdrawal happens after randomization, within the remaining stay.
         remaining = max(1.0, los_hours - (randomized - admit_dttm).total_seconds() / 3600.0)
         withdrawal = randomized + timedelta(hours=float(rng.random()) * remaining)
