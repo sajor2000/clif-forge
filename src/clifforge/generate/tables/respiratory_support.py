@@ -29,8 +29,8 @@ failure raises IMV prevalence. The spine is the only cross-table channel.
 ``*_name_examples`` column (else echo the category). On IMV rows, observed vent
 readings (``*_obs``) are a small jitter around the paired set values (or a
 documented in-bounds prior when R10 leaves the paired set null), clamped to
-consortium outlier bounds. Off-matrix ``*_set`` fields and ``vent_brand_name``
-remain deliberate omissions.
+consortium outlier bounds. Off-matrix ``*_set`` fields are null in-frame;
+``vent_brand_name`` uses Hamilton Medical model names on IMV/NIPPV rows.
 
 Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
 """
@@ -46,6 +46,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import IMV_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
+from clifforge.generate.device_catalogs import VENT_BRAND_NAMES, pick_catalog
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import bounds, loader
 
@@ -60,9 +61,9 @@ __all__ = [
 #: latches on (documented heuristic; the pack does not fit trach timing).
 _TRACH_MIN_IMV_INTERVALS = 72
 
-#: R10 device -> the exact ``*_set`` fields it populates; all others are null.
+#: R10 device -> default ``*_set`` fields (non-mode-branched devices).
 DEVICE_SET_FIELDS: dict[str, tuple[str, ...]] = {
-    "IMV": ("fio2_set", "tidal_volume_set", "resp_rate_set"),
+    "IMV": ("fio2_set", "tidal_volume_set", "resp_rate_set", "flow_rate_set"),
     "NIPPV": ("fio2_set", "peep_set", "pressure_support_set"),
     "CPAP": ("fio2_set", "peep_set"),
     "High Flow NC": ("fio2_set", "lpm_set"),
@@ -72,6 +73,23 @@ DEVICE_SET_FIELDS: dict[str, tuple[str, ...]] = {
     "Room Air": (),
 }
 
+#: IMV mode → on-matrix set fields (R10 Pressure Control vs AC-VC).
+_IMV_MODE_SET_FIELDS: dict[str, tuple[str, ...]] = {
+    "Assist Control-Volume Control": (
+        "fio2_set",
+        "tidal_volume_set",
+        "resp_rate_set",
+        "flow_rate_set",
+    ),
+    "Pressure Control": (
+        "fio2_set",
+        "resp_rate_set",
+        "peep_set",
+        "pressure_control_set",
+        "inspiratory_time_set",
+    ),
+}
+
 #: When a derived pack sets ``enrich_devices``, each stay draws one non-invasive
 #: oxygen device (used at the low-flow/NIV tiers) from these documented options,
 #: so the device_category mix includes Face Mask / NIPPV rather than only High
@@ -79,7 +97,7 @@ DEVICE_SET_FIELDS: dict[str, tuple[str, ...]] = {
 _LOW_FLOW_DEVICES = ("Nasal Cannula", "Nasal Cannula", "Face Mask")
 _NIV_DEVICES = ("High Flow NC", "High Flow NC", "High Flow NC", "NIPPV", "CPAP", "Face Mask")
 
-#: Device -> ventilator mode_category (only ventilated devices carry a mode).
+#: Device -> default ventilator mode_category (only ventilated devices carry a mode).
 _DEVICE_MODE: dict[str, str | None] = {
     "IMV": "Assist Control-Volume Control",
     "NIPPV": "Pressure Support/CPAP",
@@ -93,6 +111,10 @@ _SET_COLUMNS = (
     "resp_rate_set",
     "peep_set",
     "pressure_support_set",
+    "pressure_control_set",
+    "flow_rate_set",
+    "peak_inspiratory_pressure_set",
+    "inspiratory_time_set",
 )
 
 #: Observed vent columns emitted on IMV rows (null elsewhere).
@@ -230,6 +252,7 @@ def _set_values(
     params: dict[str, object] | None = None,
     *,
     phenotype: str = "",
+    mode: str | None = None,
 ) -> dict[str, float]:
     """In-bounds settings; prefer fitted quantile edges when the pack carries them."""
 
@@ -272,6 +295,12 @@ def _set_values(
             "resp_rate_set": _draw("resp_rate_set", 12.0, 22.0, 0),
             "peep_set": _draw("peep_set", peep_lo, peep_hi, 0),
             "pressure_support_set": round(float(rng.uniform(ps_lo, ps_hi)), 0),
+            "pressure_control_set": _draw("pressure_control_set", 12.0, 24.0, 0),
+            "flow_rate_set": _draw("flow_rate_set", 40.0, 70.0, 0),
+            "peak_inspiratory_pressure_set": _draw(
+                "peak_inspiratory_pressure_set", 12.0, 25.0, 0
+            ),
+            "inspiratory_time_set": _draw("inspiratory_time_set", 0.8, 1.4, 2),
         }
     else:
         pool = {
@@ -286,8 +315,41 @@ def _set_values(
             "resp_rate_set": _draw("resp_rate_set", 12.0, 22.0, 0),
             "peep_set": _draw("peep_set", 5.0, 12.0, 0),
             "pressure_support_set": round(float(rng.uniform(5.0, 15.0)), 0),
+            "pressure_control_set": _draw("pressure_control_set", 12.0, 24.0, 0),
+            "flow_rate_set": _draw("flow_rate_set", 40.0, 70.0, 0),
+            "peak_inspiratory_pressure_set": _draw(
+                "peak_inspiratory_pressure_set", 12.0, 25.0, 0
+            ),
+            "inspiratory_time_set": _draw("inspiratory_time_set", 0.8, 1.4, 2),
         }
-    return {field: pool[field] for field in DEVICE_SET_FIELDS[device]}
+
+    fields = _matrix_fields(device, mode, rng)
+    return {field: pool[field] for field in fields}
+
+
+def _matrix_fields(
+    device: str, mode: str | None, rng: np.random.Generator
+) -> tuple[str, ...]:
+    """R10 on-matrix set fields for this device/mode (may consume rng for NIPPV PIP alt)."""
+    if device == "IMV" and mode in _IMV_MODE_SET_FIELDS:
+        return _IMV_MODE_SET_FIELDS[mode]
+    if device == "NIPPV":
+        # R10: NIPPV uses pressure_support_set *or* peak_inspiratory_pressure_set.
+        if rng.random() < 0.7:
+            return ("fio2_set", "peep_set", "pressure_support_set")
+        return ("fio2_set", "peep_set", "peak_inspiratory_pressure_set")
+    return DEVICE_SET_FIELDS.get(device, ())
+
+
+def _pick_mode(device: str, rng: np.random.Generator) -> str | None:
+    """Choose a ventilator mode for devices that carry one."""
+    if device == "IMV":
+        return (
+            "Assist Control-Volume Control"
+            if rng.random() < 0.7
+            else "Pressure Control"
+        )
+    return _DEVICE_MODE.get(device)
 
 
 def _clamp_obs(field: str, value: float) -> float:
@@ -301,11 +363,18 @@ def _obs_values(
     """IMV-only observed readings: jitter from paired sets + documented priors."""
     if device != "IMV":
         return {}
-    tv = set_vals["tidal_volume_set"]
-    rr = set_vals["resp_rate_set"]
+    # Pressure Control has no tidal_volume_set; still chart an observed VT.
+    tv = set_vals.get("tidal_volume_set")
+    if tv is None:
+        tv = float(rng.uniform(380.0, 500.0))
+    rr = set_vals.get("resp_rate_set", 16.0)
     tv_obs = _clamp_obs("tidal_volume_obs", tv * float(rng.uniform(0.92, 1.08)))
     rr_obs = _clamp_obs("resp_rate_obs", rr * float(rng.uniform(0.9, 1.1)))
-    peep = _clamp_obs("peep_obs", float(rng.uniform(5.0, 12.0)))
+    peep = set_vals.get("peep_set")
+    if peep is None:
+        peep = _clamp_obs("peep_obs", float(rng.uniform(5.0, 12.0)))
+    else:
+        peep = _clamp_obs("peep_obs", peep)
     plateau = _clamp_obs("plateau_pressure_obs", peep + float(rng.uniform(8.0, 18.0)))
     pip = _clamp_obs(
         "peak_inspiratory_pressure_obs", plateau + float(rng.uniform(2.0, 8.0))
@@ -420,11 +489,13 @@ def sample_respiratory_support(
         if idx < len(timeline) and timeline[idx] == timeline[seg_start]:
             continue
         device, seg_trach = timeline[seg_start]
+        mode = _pick_mode(device, rng)
         sets = _set_values(
             device,
             rng,
             params if isinstance(params, dict) else None,
             phenotype=phenotype,
+            mode=mode,
         )
         rows.append(
             RespiratorySupportRow(
@@ -432,7 +503,7 @@ def sample_respiratory_support(
                 device_id=f"{hid}-D{len(rows)}",
                 recorded_dttm=admit_dttm + timedelta(hours=seg_start * grid_step),
                 device_category=device,
-                mode_category=_DEVICE_MODE.get(device),
+                mode_category=mode,
                 tracheostomy=seg_trach,
                 set_values=sets,
                 obs_values=_obs_values(device, sets, rng),
@@ -452,6 +523,7 @@ def respiratory_support_frame(rows: list[RespiratorySupportRow]) -> pl.DataFrame
         "recorded_dttm": UTC_DATETIME,
         "device_name": pl.String(),
         "device_category": pl.String(),
+        "vent_brand_name": pl.String(),
         "mode_name": pl.String(),
         "mode_category": pl.String(),
         "tracheostomy": pl.Int64(),
@@ -469,6 +541,12 @@ def respiratory_support_frame(rows: list[RespiratorySupportRow]) -> pl.DataFrame
         data["recorded_dttm"].append(r.recorded_dttm)
         data["device_name"].append(device_names.get(r.device_category, r.device_category))
         data["device_category"].append(r.device_category)
+        brand = (
+            pick_catalog(VENT_BRAND_NAMES, r.device_id)
+            if r.device_category in {"IMV", "NIPPV"}
+            else None
+        )
+        data["vent_brand_name"].append(brand)
         data["mode_name"].append(
             mode_names.get(r.mode_category, r.mode_category) if r.mode_category else None
         )

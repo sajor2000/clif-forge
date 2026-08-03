@@ -18,7 +18,7 @@ import csv
 import json
 from functools import cache, lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Collection
 
 _DATA_ROOT = Path(__file__).parent / "data"
 _MANIFEST_PATH = _DATA_ROOT / "manifest.json"
@@ -168,6 +168,21 @@ def mcide_fields(table: str) -> list[str]:
             f"No mCIDE reference data for table {table!r}. Known tables: {', '.join(sorted(mcide))}"
         )
     return sorted(mcide[table].keys())
+
+
+def resolve_mcide_column(field: str, columns: Collection[str]) -> str | None:
+    """Map an mCIDE field key to the data column that carries those values.
+
+    Usually the names match (``location_category``). The sole CLIF 2.1 skew is
+    ``adt.hospital_type_category`` (mCIDE) ↔ ``hospital_type`` (DDL column).
+    """
+    if field in columns:
+        return field
+    if field.endswith("_category"):
+        bare = field[: -len("_category")]
+        if bare in columns:
+            return bare
+    return None
 
 
 def categories(table: str, field: str) -> list[str]:

@@ -49,7 +49,7 @@ from pathlib import Path
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate.filenames import table_parquet_filename
+from clifforge.generate.filenames import is_deliverable_table, table_parquet_filename
 from clifforge.generate.orchestrator import TRUTH_FILENAME, generate_dataset
 from clifforge.generate.populations import (
     CHICAGO_ETHNICITY_TARGET,
@@ -159,11 +159,13 @@ def main(argv: list[str] | None = None) -> int:
         size = min(chunk, args.n - c * chunk)
         ds = generate_dataset(pack, n_patients=size, seed=BASE_SEED + c, id_offset=c * chunk)
         for name, frame in ds.tables.items():
+            if not is_deliverable_table(name):
+                continue
             (parts / name).mkdir(exist_ok=True)
             frame.write_parquet(parts / name / f"chunk_{c:03d}.parquet")
         (parts / "truth").mkdir(exist_ok=True)
         ds.truth.write_parquet(parts / "truth" / f"chunk_{c:03d}.parquet")
-        table_names = list(ds.tables.keys())
+        table_names = [n for n in ds.tables if is_deliverable_table(n)]
         print(f"chunk {c + 1}/{n_chunks} ({min((c + 1) * chunk, args.n):,}/{args.n:,})", flush=True)
 
     total = 0

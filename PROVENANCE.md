@@ -39,11 +39,11 @@ acuity or pathways themselves.
 
 | Field | Meaning |
 |-------|---------|
-| `support_level` | Semi-Markov organ-support ladder (ward → IMV / vaso / CRRT / ECMO tiers) |
-| `*_flag` | Interval organ-failure indicators driving labs, vitals, therapies, dx |
-| `outcome` | `alive` / `expired` (terminal archetypes shape the dying trajectory) |
-| `admission_route` | Couples hospitalization admission type to ADT arrival location |
-| `resp_phenotype` | `type1` (NC→HFNC→IMV), `type2_ohs` / `type2_hf` / `type2_copd` (NIPPV→IMV), or `unspecified` |
+| support_level | Semi-Markov organ-support ladder (ward → IMV / vaso / CRRT / ECMO tiers) |
+| organ-failure flags | Interval `resp` / `cv` / `renal` / `neuro` indicators driving labs, vitals, therapies, dx |
+| outcome | `alive` / `expired` (terminal archetypes shape the dying trajectory) |
+| admission_route | Couples hospitalization admission type to ADT arrival location |
+| resp_phenotype | `type1` (NC→HFNC→IMV), `type2_ohs` / `type2_hf` / `type2_copd` (NIPPV→IMV), or `unspecified` |
 
 ## All 28 CLIF 2.1 tables
 
@@ -78,8 +78,12 @@ acuity or pathways themselves.
 | `place_based_index` | dashboard-prior | One deprivation draw (ADI/SVI scales) |
 | `clinical_trial` | dashboard-prior | Enrolment rate for ventilated stays |
 
-Output filenames follow CLIF 2.1 maturity:
-`clif_<table>_2.1_<beta|concept|untiered>.parquet`.
+Output filenames for deliverable parquet follow CLIF 2.1 maturity badges only:
+`clif_<table>_2.1_{beta|concept}.parquet`. The three DDL tables without a website
+badge (`clinical_trial`, `patient_diagnosis`, `place_based_index`) remain
+generated in memory for tests but are omitted from disk. Geography on
+`hospitalization` shares the synthetic neighbourhood catalog with in-memory
+`place_based_index`. Lab LOINC codes are curated from LOINC 2.82 (ACTIVE terms).
 
 ## What we did — fitted ICU realism (2026-08)
 

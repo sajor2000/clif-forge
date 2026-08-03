@@ -38,7 +38,11 @@ import polars as pl
 from clifforge.conformance import gate
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, enforce_numeric_ids
-from clifforge.generate.filenames import table_parquet_filename, table_parquet_path
+from clifforge.generate.filenames import (
+    is_deliverable_table,
+    table_parquet_filename,
+    table_parquet_path,
+)
 from clifforge.generate.spine import sample_spine, truth_frame
 from clifforge.generate.tables.adt import adt_frame, sample_adt
 from clifforge.generate.tables.clinical_trial import clinical_trial_frame, sample_clinical_trial
@@ -367,11 +371,17 @@ def write_dataset(
     *,
     write_truth: bool = True,
 ) -> list[Path]:
-    """Write each CLIF table to ``clif_<table>_2.1_<maturity>.parquet`` (+ ``_truth.parquet``)."""
+    """Write deliverable CLIF tables as ``clif_<table>_2.1_{beta|concept}.parquet``.
+
+    Tables without a website beta/concept badge are generated in memory but
+    omitted from disk. Optionally writes ``_truth.parquet``.
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for name, frame in dataset.tables.items():
+        if not is_deliverable_table(name):
+            continue
         path = table_parquet_path(out, name)
         frame.write_parquet(path)
         written.append(path)
@@ -399,9 +409,10 @@ def generate_streaming(
     seed and id regardless of ``chunk_size`` (see :func:`_generate_frames`) — but
     only ``chunk_size`` encounters are ever held in memory at once. Each batch is
     gated and written to a per-table part file; the parts are then streamed into one
-    ``clif_<table>_2.1_<maturity>.parquet`` each (plus ``_truth.parquet``) and removed.
-    ``chunk_size`` is the memory dial: smaller uses less RAM (and runs a touch
-    slower). Returns the written paths.
+    ``clif_<table>_2.1_{beta|concept}.parquet`` each (plus ``_truth.parquet``) and
+    removed. Untiered tables are skipped at write time. ``chunk_size`` is the
+    memory dial: smaller uses less RAM (and runs a touch slower). Returns the
+    written paths.
     """
     if n_patients <= 0:
         raise ValueError("n_patients must be a positive integer")
@@ -415,9 +426,11 @@ def generate_streaming(
     table_names: list[str] = [
         "patient",
         "hospitalization",
-        *[n for n, *_ in _TABLE_REGISTRY],
-        *[n for n, *_ in _DERIVED_REGISTRY],
+        *[n for n, *_ in _TABLE_REGISTRY if is_deliverable_table(n)],
+        *[n for n, *_ in _DERIVED_REGISTRY if is_deliverable_table(n)],
     ]
+    # patient + hospitalization are always beta; still filter for safety
+    table_names = [n for n in table_names if is_deliverable_table(n)]
     if write_truth:
         table_names.append("truth")
 
@@ -429,6 +442,8 @@ def generate_streaming(
             {**tables, "truth": enforce_numeric_ids(truth_frame(spines))} if write_truth else tables
         )
         for name, frame in batch.items():
+            if name != "truth" and not is_deliverable_table(name):
+                continue
             (parts / name).mkdir(parents=True, exist_ok=True)
             frame.write_parquet(parts / name / f"part_{c:05d}.parquet")
 

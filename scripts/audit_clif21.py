@@ -19,7 +19,7 @@ from pathlib import Path
 
 from clifforge.demo import demo_pack
 from clifforge.generate.orchestrator import generate_dataset
-from clifforge.reference import categories, loader
+from clifforge.reference import categories, loader, resolve_mcide_column
 
 
 def _known_gaps() -> dict[str, dict[str, str]]:
@@ -46,15 +46,23 @@ def _status(
     return "gap"
 
 
-def _mcide_ok(table: str, field: str, frame_columns: set[str], frame) -> str:
-    if field not in frame_columns:
-        return "not_emitted"
-    allowed = set(categories(table, field))
-    series = frame[field].drop_nulls()
+def _mcide_ok(table: str, mcide_field: str, data_column: str, frame) -> str:
+    allowed = set(categories(table, mcide_field))
+    series = frame[data_column].drop_nulls()
     if series.is_empty():
         return "empty"
     bad = set(series.cast(str).unique().to_list()) - allowed
     return "ok" if not bad else f"FAIL:{len(bad)}"
+
+
+def _mcide_field_for_column(name: str, mcide_fields: set[str]) -> str | None:
+    """DDL column → mCIDE field key (handles ``hospital_type`` skew)."""
+    if name in mcide_fields:
+        return name
+    aliased = f"{name}_category"
+    if aliased in mcide_fields:
+        return aliased
+    return None
 
 
 def main() -> int:
@@ -83,7 +91,16 @@ def main() -> int:
         for col in loader.table_columns(table):
             name = col["name"]
             cov = _status(table, name, emitted, known_gaps)
-            mcide = _mcide_ok(table, name, emitted, frame) if name in mcide_fields else "—"
+            mcide_field = _mcide_field_for_column(name, mcide_fields)
+            if mcide_field is None:
+                mcide = "—"
+            else:
+                data_col = resolve_mcide_column(mcide_field, emitted)
+                mcide = (
+                    "not_emitted"
+                    if data_col is None
+                    else _mcide_ok(table, mcide_field, data_col, frame)
+                )
             lines.append(f"| `{table}` | `{name}` | {cov} | {mcide} |")
 
     text = "\n".join(lines) + "\n"

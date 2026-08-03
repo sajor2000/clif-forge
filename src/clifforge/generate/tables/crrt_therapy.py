@@ -23,6 +23,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.device_catalogs import DIALYSIS_MACHINE_NAMES, pick_catalog
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import bounds
@@ -145,6 +146,9 @@ def crrt_therapy_frame(rows: list[CrrtRow]) -> pl.DataFrame:
             "hospitalization_id": [r.hospitalization_id for r in rows],
             "device_id": [r.device_id for r in rows],
             "recorded_dttm": [r.recorded_dttm for r in rows],
+            "dialysis_machine_name": [
+                pick_catalog(DIALYSIS_MACHINE_NAMES, r.device_id) for r in rows
+            ],
             "crrt_mode_name": [r.crrt_mode_category for r in rows],
             "crrt_mode_category": [r.crrt_mode_category for r in rows],
             "blood_flow_rate": [r.blood_flow_rate for r in rows],
@@ -161,6 +165,7 @@ def crrt_therapy_frame(rows: list[CrrtRow]) -> pl.DataFrame:
             "hospitalization_id": pl.String,
             "device_id": pl.String,
             "recorded_dttm": UTC_DATETIME,
+            "dialysis_machine_name": pl.String,
             "crrt_mode_name": pl.String,
             "crrt_mode_category": pl.String,
             "blood_flow_rate": pl.Float64,

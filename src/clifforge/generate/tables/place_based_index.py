@@ -13,9 +13,9 @@ would quietly break the disparities analyses this table exists to support. So a
 single latent deprivation draw generates both, with the SVI jittered around it
 rather than resampled.
 
-This carries no PHI risk: the values are drawn from the marginal scale, not from
-any real geography, and nothing here ties back to the FIPS/zip columns on
-``hospitalization`` (which this generator does not populate).
+This carries no PHI risk: geography codes on ``hospitalization`` and the indices
+here share a synthetic neighbourhood draw keyed by ``hospitalization_id``
+(:mod:`clifforge.generate.geography`) — fictional codes, not real patient areas.
 
 Scales and version labels are documented priors recorded in ``PROVENANCE.md``;
 CLIF 2.1 gives this table no mCIDE. Reproducible under a fixed ``rng`` (R22).
@@ -30,6 +30,7 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
+from clifforge.generate.geography import neighborhood_for
 from clifforge.generate.spine import SpineFrame
 
 __all__ = ["PlaceIndexRow", "place_based_index_frame", "sample_place_based_index"]
@@ -67,8 +68,8 @@ def sample_place_based_index(
     """Emit correlated ADI and SVI values for one hospitalization (R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
 
-    # One latent neighbourhood deprivation level in [0, 1] drives both indices.
-    deprivation = float(rng.random())
+    # Same neighbourhood as hospitalization geography; jitter only SVI.
+    deprivation = neighborhood_for(hid).deprivation
     svi = float(np.clip(deprivation + rng.normal(0.0, _SVI_JITTER), 0.0, 1.0))
 
     return [

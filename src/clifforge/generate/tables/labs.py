@@ -40,8 +40,9 @@ only cross-table channel (KTD-6); this generator never reads another table.
 ``reference_unit`` and ``lab_order_category`` come from the vendored mCIDE
 crosswalk on ``lab_category`` (exact consortium pairings). Collect/result times
 follow the same order ≤ collect < result prior as microbiology cultures, with
-shorter chem-panel turnaround. Specimen type and LOINC remain deliberate
-omissions (no consortium specimen list; invented LOINC would silently misresolve).
+shorter chem-panel turnaround. Specimen type and LOINC come from the curated
+``lab_category`` crosswalk (:mod:`clifforge.generate.loinc`) — never invented
+ad-hoc codes.
 
 Output is reproducible byte-for-byte under a fixed ``rng`` (R22).
 """
@@ -60,6 +61,7 @@ from scipy.special import ndtr, ndtri
 from clifforge.fit.estimators import LAB_QUANTILE_PROBS
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
+from clifforge.generate.loinc import lab_loinc_code, lab_specimen
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import bounds, loader
 
@@ -337,6 +339,7 @@ def labs_frame(observations: list[LabObservation]) -> pl.DataFrame:
     order_name_by_cat = loader.crosswalk("labs", "lab_order_category", "description")
 
     order_categories = [order_cat_by_lab[o.lab_category] for o in observations]
+    specimens = [lab_specimen(o.lab_category) for o in observations]
     return pl.DataFrame(
         {
             "hospitalization_id": [o.hospitalization_id for o in observations],
@@ -352,6 +355,9 @@ def labs_frame(observations: list[LabObservation]) -> pl.DataFrame:
             "lab_value": [o.lab_value for o in observations],
             "lab_value_numeric": [o.lab_value_numeric for o in observations],
             "reference_unit": [unit_by_lab[o.lab_category] for o in observations],
+            "lab_specimen_name": [s[1] for s in specimens],
+            "lab_specimen_category": [s[0] for s in specimens],
+            "lab_loinc_code": [lab_loinc_code(o.lab_category) for o in observations],
         },
         schema={
             "hospitalization_id": pl.String,
@@ -365,5 +371,8 @@ def labs_frame(observations: list[LabObservation]) -> pl.DataFrame:
             "lab_value": pl.String,
             "lab_value_numeric": pl.Float64,
             "reference_unit": pl.String,
+            "lab_specimen_name": pl.String,
+            "lab_specimen_category": pl.String,
+            "lab_loinc_code": pl.String,
         },
     )

@@ -30,44 +30,9 @@ from clifforge.generate.orchestrator import generate_dataset
 from clifforge.reference import loader
 
 #: table -> {column: why it is not emitted}.
-KNOWN_GAPS: dict[str, dict[str, str]] = {
-    "crrt_therapy": {
-        "dialysis_machine_name": "device make/model free text; no vendored source to draw from",
-    },
-    "hospitalization": {
-        # Geography is deliberately absent rather than merely unmodelled. Synthetic
-        # codes would be either meaningless or, if drawn from real ones, a
-        # re-identification surface on a dataset whose whole point is carrying none.
-        # place_based_index carries the neighbourhood-deprivation signal instead.
-        "zipcode_nine_digit": "deliberate: no synthetic geography (see place_based_index)",
-        "zipcode_five_digit": "deliberate: no synthetic geography (see place_based_index)",
-        "census_block_code": "deliberate: no synthetic geography (see place_based_index)",
-        "census_block_group_code": "deliberate: no synthetic geography (see place_based_index)",
-        "census_tract": "deliberate: no synthetic geography (see place_based_index)",
-        "state_code": "deliberate: no synthetic geography (see place_based_index)",
-        "county_code": "deliberate: no synthetic geography (see place_based_index)",
-        "fips_version": "deliberate: no synthetic geography (see place_based_index)",
-    },
-    "labs": {
-        # A wrong LOINC code is worse than an absent one: it resolves, silently,
-        # to a different analyte than the row actually reports.
-        "lab_loinc_code": "no vendored LOINC crosswalk; an invented code would resolve wrongly",
-        "lab_specimen_name": "no consortium specimen vocabulary; not inventing one",
-        "lab_specimen_category": "no consortium specimen vocabulary; not inventing one",
-    },
-    "microbiology_culture": {
-        "lab_loinc_code": "no vendored LOINC crosswalk; an invented code would resolve wrongly",
-    },
-    "respiratory_support": {
-        "vent_brand_name": "ventilator make/model free text; no consortium catalog",
-        # Off-matrix set fields stay null until R10 DEVICE_SET_FIELDS expands to
-        # modes that use them (e.g. Pressure Control → pressure_control_set).
-        "pressure_control_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
-        "flow_rate_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
-        "peak_inspiratory_pressure_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
-        "inspiratory_time_set": "R10: not in DEVICE_SET_FIELDS for emitted modes",
-    },
-}
+#: Empty after the gap-closure pass: every DDL column is emitted (curated LOINC,
+#: synthetic geography, R10 set fields, Hamilton vent brands, CRRT machine names).
+KNOWN_GAPS: dict[str, dict[str, str]] = {}
 
 #: The nine tables added in the canonical re-foundation are column-complete, and
 #: are named here so a future edit cannot quietly reintroduce a gap in one.

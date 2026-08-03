@@ -5,8 +5,9 @@ sized so every file stays under GitHub's **50 MB soft limit** (vitals ≈ 41 MB)
 lets you inspect realistic, multi-table output and test code without generating
 anything or holding any credential.
 
-- **5,000 ICU encounters**, all 28 canonical CLIF 2.1 tables plus `_truth.parquet`
-  (latent spine).
+- **5,000 ICU encounters**, the **25** website-badged beta/concept CLIF 2.1 tables
+  plus `_truth.parquet` (latent spine). Untiered DDL tables are omitted from
+  deliverable parquet.
 - Built from the **`icu_all28`** parameter pack (fit on local source CLIF extract)
   through the validated **`recalibrate_fitted_icu`** path: spine tempering, LOS
   sojourns, gated NIV, terminal deterioration, RF phenotypes, and ADT front-door

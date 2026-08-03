@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate.filenames import table_parquet_path
+from clifforge.generate.filenames import is_deliverable_table, table_parquet_path
 from clifforge.generate.orchestrator import generate_dataset
 from clifforge.variants import load_spec, spec_to_pack
 
@@ -29,12 +29,12 @@ _N = 30
 
 
 def _compare(sample_dir: Path) -> None:
-    """Assert every table of the committed sample reproduces from its recipe.
+    """Assert every deliverable table of the committed sample reproduces from its recipe.
 
-    Checking *every* table matters: an earlier version of this test compared only
-    ``hospitalization``, so it kept passing while nine tables were added and five
-    others changed shape underneath it. A reproducibility test that only looks at
-    the one table nobody edits does not test reproducibility.
+    Checking *every* deliverable table matters: an earlier version of this test
+    compared only ``hospitalization``, so it kept passing while nine tables were
+    added and five others changed shape underneath it. Untiered tables are
+    generated in memory but omitted from deliverable parquet.
     """
     spec = load_spec(sample_dir / "spec.toml")
     base_path = Path(spec.base_pack) if spec.base_pack else _BASE
@@ -43,6 +43,8 @@ def _compare(sample_dir: Path) -> None:
 
     compared = 0
     for table, regen in regenerated.items():
+        if not is_deliverable_table(table):
+            continue
         path = table_parquet_path(sample_dir, table)
         assert path.exists(), f"{sample_dir}/{path.name} is missing — regenerate the sample"
 
@@ -68,7 +70,7 @@ def _compare(sample_dir: Path) -> None:
             f"{table} does not reproduce from its recipe — regenerate the sample"
         )
         compared += 1
-    assert compared > 20, f"only {compared} tables compared; expected the full canonical set"
+    assert compared > 20, f"only {compared} tables compared; expected the deliverable set"
 
 
 def test_committed_sample_reproduces_from_its_recipe() -> None:

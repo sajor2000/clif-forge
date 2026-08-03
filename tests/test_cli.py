@@ -305,11 +305,15 @@ def test_conformance_failure_is_detected(pack: ParamPack) -> None:
 
 
 def test_write_dataset_can_skip_truth(pack: ParamPack, tmp_path) -> None:
+    from clifforge.generate.filenames import deliverable_tables
+
     ds = generate_dataset(pack, n_patients=4, seed=1)
     written = write_dataset(ds, tmp_path, write_truth=False)
     assert not (tmp_path / "_truth.parquet").exists()
-    assert len(written) == len(loader.dictionary_tables())
+    assert len(written) == len(deliverable_tables())
     assert all(p.suffix == ".parquet" for p in written)
+    assert all("_2.1_beta.parquet" in p.name or "_2.1_concept.parquet" in p.name for p in written)
+    assert not any("untiered" in p.name for p in written)
 
 
 # --- CLI end-to-end ---------------------------------------------------------- #

@@ -14,7 +14,7 @@ import pytest
 
 from clifforge.demo import demo_pack
 from clifforge.generate.orchestrator import generate_dataset
-from clifforge.reference import bounds, categories, loader
+from clifforge.reference import bounds, categories, loader, resolve_mcide_column
 
 #: (table, category_field, companion_column) triples whose row-level rollup must
 #: agree with the vendored mCIDE companion column via ``loader.crosswalk``.
@@ -48,20 +48,28 @@ def _mcide_pairs() -> list[tuple[str, str]]:
     return pairs
 
 
+def test_resolve_mcide_column_handles_hospital_type_skew() -> None:
+    """DDL ``hospital_type`` carries mCIDE ``hospital_type_category`` values."""
+    assert resolve_mcide_column("hospital_type_category", {"hospital_type"}) == "hospital_type"
+    assert resolve_mcide_column("location_category", {"location_category"}) == "location_category"
+    assert resolve_mcide_column("hospital_type_category", {"location_category"}) is None
+
+
 @pytest.mark.parametrize(("table", "field"), _mcide_pairs())
 def test_every_emitted_category_is_exact_mcide_member(
     table: str, field: str, dataset: dict[str, Any]
 ) -> None:
     frame = dataset[table]
-    if field not in frame.columns:
+    # mCIDE field key may differ from the DDL column (adt.hospital_type_category).
+    data_col = resolve_mcide_column(field, frame.columns)
+    if data_col is None:
         pytest.skip(f"{table}.{field} not emitted (documented gap or unused)")
     allowed = set(categories(table, field))
-    # Column may share its name with the mCIDE field, or (rare) a renamed alias.
-    series = frame[field].drop_nulls()
+    series = frame[data_col].drop_nulls()
     if series.is_empty():
         return
     bad = set(series.cast(str).unique().to_list()) - allowed
-    assert not bad, f"{table}.{field} has non-mCIDE values: {sorted(bad)[:20]}"
+    assert not bad, f"{table}.{data_col} ({field}) has non-mCIDE values: {sorted(bad)[:20]}"
 
 
 @pytest.mark.parametrize(("table", "field", "companion"), _CROSSWALKS)

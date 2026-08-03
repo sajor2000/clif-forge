@@ -36,6 +36,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.loinc import micro_loinc_code
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import loader
@@ -170,7 +171,7 @@ def microbiology_nonculture_frame(events: list[NonCultureEvent]) -> pl.DataFrame
             "reference_low": [None] * n,
             "reference_high": [None] * n,
             "result_units": [None] * n,
-            "lab_loinc_code": [None] * n,
+            "lab_loinc_code": [micro_loinc_code(e.organism_category) for e in events],
         },
         schema={
             "patient_id": pl.String,

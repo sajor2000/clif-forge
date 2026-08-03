@@ -19,8 +19,9 @@ is ``discharge_category == "Expired"``. So:
 ``patient_id`` / ``hospitalization_id`` are caller-assigned (the orchestrator owns
 the id scheme and one-to-many linking, R8); the sampled content is reproducible
 byte-for-byte under a fixed ``rng`` (R22). ``age_at_admission`` is drawn from the
-pack's quantile grid when present. Geographic zip/census codes are omitted, not
-fabricated (R15; schema is permissive) — ``place_based_index`` carries deprivation.
+pack's quantile grid when present. Geographic zip/census codes come from the
+shared synthetic neighbourhood catalog (:mod:`clifforge.generate.geography`),
+linked by ``hospitalization_id`` to in-memory ``place_based_index`` draws.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.geography import neighborhood_for
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 
@@ -192,4 +194,25 @@ def hospitalization_frame(records: list[HospitalizationRecord]) -> pl.DataFrame:
     if any(r.age_at_admission is not None for r in records):
         data["age_at_admission"] = [r.age_at_admission for r in records]
         schema["age_at_admission"] = pl.Int64
+    neighborhoods = [neighborhood_for(r.hospitalization_id) for r in records]
+    data["zipcode_nine_digit"] = [n.zipcode_nine_digit for n in neighborhoods]
+    data["zipcode_five_digit"] = [n.zipcode_five_digit for n in neighborhoods]
+    data["census_block_code"] = [n.census_block_code for n in neighborhoods]
+    data["census_block_group_code"] = [n.census_block_group_code for n in neighborhoods]
+    data["census_tract"] = [n.census_tract for n in neighborhoods]
+    data["state_code"] = [n.state_code for n in neighborhoods]
+    data["county_code"] = [n.county_code for n in neighborhoods]
+    data["fips_version"] = [n.fips_version for n in neighborhoods]
+    schema.update(
+        {
+            "zipcode_nine_digit": pl.String,
+            "zipcode_five_digit": pl.String,
+            "census_block_code": pl.String,
+            "census_block_group_code": pl.String,
+            "census_tract": pl.String,
+            "state_code": pl.String,
+            "county_code": pl.String,
+            "fips_version": pl.String,
+        }
+    )
     return pl.DataFrame(data, schema=schema)

@@ -36,6 +36,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.loinc import micro_loinc_code
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 
@@ -185,6 +186,7 @@ def microbiology_culture_frame(events: list[CultureEvent]) -> pl.DataFrame:
             "organism_name": [e.organism_category for e in events],
             "organism_category": [e.organism_category for e in events],
             "organism_group": [e.organism_group for e in events],
+            "lab_loinc_code": [micro_loinc_code(e.fluid_category) for e in events],
         },
         schema={
             "patient_id": pl.String,
@@ -200,5 +202,6 @@ def microbiology_culture_frame(events: list[CultureEvent]) -> pl.DataFrame:
             "organism_name": pl.String,
             "organism_category": pl.String,
             "organism_group": pl.String,
+            "lab_loinc_code": pl.String,
         },
     )

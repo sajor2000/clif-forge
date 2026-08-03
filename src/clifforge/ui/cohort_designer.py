@@ -26,7 +26,7 @@ import streamlit as st
 
 from clifforge import __version__
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate.filenames import table_parquet_path
+from clifforge.generate.filenames import is_deliverable_table, table_parquet_path
 from clifforge.generate.orchestrator import TRUTH_FILENAME, generate_dataset
 from clifforge.manifest import write_manifest
 from clifforge.preview import PREVIEW_SAMPLE, cohort_profile
@@ -171,6 +171,8 @@ def _generate_download(spec: VariantSpec) -> tuple[bytes, dict[str, Any]]:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
         for name, frame in ds.tables.items():
+            if not is_deliverable_table(name):
+                continue
             frame.write_parquet(table_parquet_path(out, name))
         ds.truth.write_parquet(out / TRUTH_FILENAME)
         manifest = write_manifest(out, spec=dataclasses.asdict(spec), seed=spec.seed)
