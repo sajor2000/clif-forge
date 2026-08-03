@@ -24,10 +24,11 @@ import polars as pl
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["TherapyDetailRow", "sample_therapy_details", "therapy_details_frame"]
 
-_REHAB_PROB = 0.5
+_REHAB_PROB = _DASH_RATES["key_icu_orders"]
 _SESSION_INTERVAL_HOURS = 24.0
 #: Documented PT/OT session elements (element_category -> value).
 _SESSION_ELEMENTS: tuple[tuple[str, str], ...] = (

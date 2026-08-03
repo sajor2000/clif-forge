@@ -180,3 +180,39 @@ def test_fitted_marginal_path_matches_distribution_and_keeps_coupling() -> None:
     assert (
         norepi_total > 0 and norepi_in_cv == norepi_total
     )  # every vasopressor start in a cv window
+
+
+def test_fitted_sedation_pairs_with_imv_only() -> None:
+    """Sedatives are confined to IMV stays; floor ICU never gets continuous sedation."""
+    from datetime import UTC, datetime
+
+    pack = _pack(stop_hazard=0.0)
+    pack.tables["medication_admin_continuous"]["params"]["med_category_marginal"] = {
+        "sodium_chloride": 0.5,
+        "norepinephrine": 0.2,
+        "propofol": 0.3,
+    }
+    pack.tables["medication_admin_continuous"]["params"]["sedation_per_imv"] = True
+    pack.tables["medication_admin_continuous"]["params"]["sedation_imv_prob"] = 1.0
+    admit = datetime(2020, 1, 1, tzinfo=UTC)
+
+    # IMV stay → propofol present, starts only on L≥3 intervals.
+    imv_sp = _spine([3] * 20, [False] * 20, hid="Himv")
+    imv_rows = sample_medication_admin_continuous(
+        imv_sp, pack, np.random.default_rng(0), hospitalization_id="Himv"
+    )
+    assert any(r.med_category == "propofol" for r in imv_rows)
+    for r in imv_rows:
+        if r.med_category == "propofol" and r.mar_action_category == "start":
+            idx = int((r.admin_dttm - admit).total_seconds() // 3600)
+            assert imv_sp.support_level[min(idx, len(imv_sp.support_level) - 1)] >= 3
+
+    # Floor ICU, never IMV → no sedative even though marginal weights propofol.
+    floor_sp = _spine([2] * 20, [False] * 20, hid="Hfloor")
+    floor_rows = sample_medication_admin_continuous(
+        floor_sp, pack, np.random.default_rng(1), hospitalization_id="Hfloor"
+    )
+    assert not any(
+        r.med_category in {"propofol", "midazolam", "fentanyl", "dexmedetomidine"}
+        for r in floor_rows
+    )

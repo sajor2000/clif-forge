@@ -113,14 +113,14 @@ def sample_medication_orders(
                 order_end_dttm=last.admin_dttm,
                 ordered_dttm=first.admin_dttm - lead,
                 med_category=first.med_category,
-                med_group=med_groups[source][first.med_category],
+                med_group=med_groups[source].get(first.med_category, first.med_category),
                 med_route_category=first.med_route_category,
                 med_dose=first.med_dose,
                 med_dose_unit=first.med_dose_unit,
                 med_frequency=(
                     _CONTINUOUS_FREQUENCY
                     if source == _CONTINUOUS
-                    else f"q{round(ORDERED_INTERVAL_HOURS[first.med_category])}h"
+                    else f"q{round(ORDERED_INTERVAL_HOURS.get(first.med_category, 12.0))}h"
                 ),
             )
         )

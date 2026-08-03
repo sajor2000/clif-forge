@@ -26,6 +26,7 @@ from clifforge.generate.populations import (
     derive_chicago_population,
 )
 from clifforge.generate.recalibrate import (
+    recalibrate_mimic_icu,
     recalibrate_to_full_hospital,
     recalibrate_to_network_median,
 )
@@ -68,9 +69,8 @@ def default_base_pack_path() -> str:
 
 
 _KNOWN_TOP = {"name", "n", "seed", "base_pack", "mode", "demographics", "rates"}
-#: Population modes: the ICU cohort (network-median, every stay an ICU stay) or the
-#: full hospital population (ward/ED/stepdown/ICU mix with realistic arrival flow).
-_KNOWN_MODES = {"icu", "full_hospital"}
+#: Population modes: ICU network-median, full hospital, or MIMIC-empirical ICU.
+_KNOWN_MODES = {"icu", "full_hospital", "mimic_icu"}
 _KNOWN_DEMOGRAPHICS = {"age_shift", "hispanic_frac", "race_target"}
 _KNOWN_RATES = {"imv", "mortality_scale", "vaso_frac", "crrt_prob", "prone_severe"}
 
@@ -83,7 +83,8 @@ class VariantSpec:
     n: int = 85_248
     seed: int = 2025
     base_pack: str | None = None
-    #: "icu" (network-median ICU cohort, default) or "full_hospital" (ward/ED/ICU mix).
+    #: "icu" (network-median), "full_hospital" (ward/ED/ICU mix), or "mimic_icu"
+    #: (MIMIC-fitted pack + validated MIMIC ICU recalibrate).
     mode: str = "icu"
     # demographics — age_shift is *relative to the base pack* (0 = the base's age
     # distribution); the master's own shift is already baked into the base pack.
@@ -213,6 +214,9 @@ def spec_to_pack(
         # The full-hospital transform carries its own tuned acuity/LOS/flow defaults;
         # the spec's ICU-specific rate overrides (imv, mortality_scale) do not apply.
         return recalibrate_to_full_hospital(derived, crrt_prob=spec.crrt_prob)
+    if spec.mode == "mimic_icu":
+        # MIMIC all-28 pack + validated ICU recalibrate (IMV/mort/NIV/ADT arrivals).
+        return recalibrate_mimic_icu(derived)
     return recalibrate_to_network_median(
         derived,
         peak_imv_target=spec.imv,

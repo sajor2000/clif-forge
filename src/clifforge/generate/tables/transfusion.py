@@ -21,11 +21,13 @@ from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["TransfusionRow", "sample_transfusion", "transfusion_frame"]
 
 #: Expected transfusions for a peak-acuity (level 5) stay; scaled down by acuity.
-_TRANSFUSION_BASE_RATE = 1.2
+#: Anchored so a mid-acuity stay lands near the dashboard-prior stay rate.
+_TRANSFUSION_BASE_RATE = _DASH_RATES["transfusion"] * 5.0
 #: (component_name, typical volume mL) — documented adult product norms.
 _COMPONENT_MARGINAL = {"RBC": 0.6, "FFP": 0.25, "Platelets": 0.15}
 _COMPONENT_VOLUME = {"RBC": 300.0, "FFP": 250.0, "Platelets": 300.0}

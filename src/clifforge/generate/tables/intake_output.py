@@ -55,6 +55,9 @@ _URINE = "Urine"
 #: Expressed here as absolute mL/hr for an ~80 kg adult.
 _URINE_ML_PER_HOUR = (40.0, 120.0)
 _URINE_ML_PER_HOUR_OLIGURIC = (5.0, 30.0)
+#: Near-anuria during L5 / multi-organ failure (CRRT-tier acuity).
+_URINE_ML_PER_HOUR_ANURIC = (0.0, 5.0)
+_ANURIA_SUPPORT_LEVEL = 5
 
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
@@ -89,6 +92,7 @@ def sample_intake_output(
             continue
         at = admit_dttm + timedelta(hours=idx * grid_step)
         oliguric = spine.renal_flag[idx]
+        anuric = oliguric and spine.support_level[idx] >= _ANURIA_SUPPORT_LEVEL
         resuscitated = oliguric or spine.cv_flag[idx]
 
         intake_range = _INTAKE_ML_PER_HOUR_RESUSCITATED if resuscitated else _INTAKE_ML_PER_HOUR
@@ -101,7 +105,12 @@ def sample_intake_output(
                 in_out_flag=_INTAKE,
             )
         )
-        urine_range = _URINE_ML_PER_HOUR_OLIGURIC if oliguric else _URINE_ML_PER_HOUR
+        if anuric:
+            urine_range = _URINE_ML_PER_HOUR_ANURIC
+        elif oliguric:
+            urine_range = _URINE_ML_PER_HOUR_OLIGURIC
+        else:
+            urine_range = _URINE_ML_PER_HOUR
         rows.append(
             IntakeOutputRow(
                 hospitalization_id=hid,

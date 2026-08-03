@@ -7,12 +7,9 @@ spine marks as **expired**, a de-escalation to ``DNR/DNI`` and often ``AND``
 death — the R12 coupling to the terminal outcome. Survivors overwhelmingly stay
 ``Full``. Start times are strictly ordered per patient.
 
-Note on provenance: the plan intends ``code_status`` to be a **fitted** table, but
-the current parameter pack (fit at U5) carries no ``code_status`` block, so this
-generator is spine-outcome-driven with documented transition rates (un-fitted,
-R15) rather than sampling fitted rates. When a future pack fits ``code_status``,
-this generator should switch to those rates and the manifest should mark it
-fitted. The spine is the only cross-table channel (KTD-6); output is reproducible
+When the pack carries a fitted ``code_status`` block (MIMIC all-28 packs),
+de-escalation rates are read from ``params``; otherwise documented priors apply
+(R15). The spine is the only cross-table channel (KTD-6); output is reproducible
 byte-for-byte under a fixed ``rng`` (R22).
 """
 
@@ -65,8 +62,14 @@ def sample_code_status(
     if los_hours <= 0:
         return events  # zero-length stay: only the admission Full status (keeps start times strict)
 
+    block = pack.tables.get("code_status", {})
+    params = block.get("params", {}) if isinstance(block, dict) else {}
+    dnr_expired = float(params.get("dnr_prob_expired", _DNR_PROB_EXPIRED))
+    comfort_expired = float(params.get("comfort_prob_expired", _COMFORT_PROB_EXPIRED))
+    dnr_survivor = float(params.get("dnr_prob_survivor", _DNR_PROB_SURVIVOR))
+
     if spine.outcome == "expired":
-        if rng.random() < _DNR_PROB_EXPIRED:
+        if rng.random() < dnr_expired:
             events.append(
                 CodeStatusEvent(
                     patient_id,
@@ -74,7 +77,7 @@ def sample_code_status(
                     "DNR/DNI",
                 )
             )
-            if rng.random() < _COMFORT_PROB_EXPIRED:
+            if rng.random() < comfort_expired:
                 events.append(
                     CodeStatusEvent(
                         patient_id,
@@ -82,7 +85,7 @@ def sample_code_status(
                         "AND",
                     )
                 )
-    elif rng.random() < _DNR_PROB_SURVIVOR:
+    elif rng.random() < dnr_survivor:
         events.append(
             CodeStatusEvent(
                 patient_id,

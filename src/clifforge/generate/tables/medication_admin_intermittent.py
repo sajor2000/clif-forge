@@ -24,6 +24,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import loader
 
@@ -85,12 +86,24 @@ def sample_medication_admin_intermittent(
     """Emit one hospitalization's discrete med administrations (R11, R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     los_hours = spine.n_intervals * grid_step_hours(pack)
+    block = pack.tables.get("medication_admin_intermittent", {})
+    params = block.get("params", {}) if isinstance(block, dict) else {}
+    stay_prob = float(params.get("stay_prevalence", _ABX_PROB))
+    if rng.random() >= stay_prob:
+        return []  # no intermittent meds this stay
 
-    if rng.random() >= _ABX_PROB:
-        return []  # not on antibiotics this stay
+    med_marginal = params.get("med_category_marginal")
+    if isinstance(med_marginal, dict) and med_marginal:
+        n_meds = 1 + int(rng.random() < 0.4)
+        chosen = [categorical(med_marginal, rng) for _ in range(n_meds)]
+        schedule: list[tuple[str, float, float]] = [
+            (med, 12.0, 1000.0) for med in dict.fromkeys(chosen)
+        ]
+    else:
+        schedule = list(_ANTIBIOTIC_SCHEDULE)
 
     rows: list[MedIntermittentRow] = []
-    for med, interval_hours, dose in _ANTIBIOTIC_SCHEDULE:
+    for med, interval_hours, dose in schedule:
         order_id = f"{hid}-{med}"
         elapsed = 0.0
         while elapsed < los_hours:

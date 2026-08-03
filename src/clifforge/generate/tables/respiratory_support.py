@@ -164,18 +164,129 @@ def _device_gated(level: int, l2_niv: str | None, low_flow: str) -> str:
     return "Room Air"
 
 
-def _set_values(device: str, rng: np.random.Generator) -> dict[str, float]:
-    """Documented in-bounds settings for the device's matrix fields (un-fitted)."""
-    pool = {
-        "fio2_set": round(float(rng.uniform(0.3, 0.7)), 2),
-        "lpm_set": round(
-            float(rng.uniform(30.0, 55.0) if device == "High Flow NC" else rng.uniform(1.0, 6.0)), 1
-        ),
-        "tidal_volume_set": round(float(rng.uniform(380.0, 500.0)), 0),
-        "resp_rate_set": round(float(rng.uniform(12.0, 22.0)), 0),
-        "peep_set": round(float(rng.uniform(5.0, 12.0)), 0),
-        "pressure_support_set": round(float(rng.uniform(5.0, 15.0)), 0),
-    }
+def _device_phenotype(
+    level: int,
+    phenotype: str,
+    low_flow: str,
+    *,
+    l2_niv: str | None,
+) -> str | None:
+    """Clinical escalation ladder for a typed respiratory phenotype, or None.
+
+    * ``type1`` (hypoxemic RF): NC → (HFNC if stay gated onto NIV) → IMV
+    * ``type2_*`` (hypercapnic / OHS / HF): low-flow → (NIPPV if gated) → IMV
+    * ``unspecified`` / ``""``: caller keeps gated / legacy path
+
+    ``l2_niv`` is the stay-level NIV assignment (HFNC/NIPPV/None). Typed
+    phenotypes only put HFNC/NIPPV on L2 when the stay is gated onto NIV — so
+    MIMIC stay prevalences hold while escalation *shape* stays clinical.
+    """
+    if phenotype == "type1":
+        if level >= IMV_MIN_SUPPORT_LEVEL:
+            return "IMV"
+        if level == 2:
+            return l2_niv if l2_niv is not None else low_flow
+        if level == 1:
+            return "Nasal Cannula"
+        return "Room Air"
+    if phenotype.startswith("type2"):
+        if level >= IMV_MIN_SUPPORT_LEVEL:
+            return "IMV"
+        if level == 2:
+            return l2_niv if l2_niv is not None else low_flow
+        if level == 1:
+            # OHS / HF often start on Face Mask or NC before NIV.
+            return low_flow if low_flow in {"Nasal Cannula", "Face Mask"} else "Nasal Cannula"
+        return "Room Air"
+    return None
+
+
+def _phenotype_l2_niv(
+    phenotype: str,
+    rng: np.random.Generator,
+    *,
+    p_nippv: float,
+    p_hfnc: float,
+) -> str | None:
+    """Stay-level NIV draw: MIMIC any-NIV rate, phenotype picks HFNC vs NIPPV."""
+    p_any = p_nippv + p_hfnc
+    r = float(rng.random())
+    on_niv = r < p_any
+    if phenotype == "type1":
+        return "High Flow NC" if on_niv else None
+    if phenotype.startswith("type2"):
+        return "NIPPV" if on_niv else None
+    # Unspecified: split by relative NIPPV/HFNC weights.
+    if r < p_nippv:
+        return "NIPPV"
+    if r < p_any:
+        return "High Flow NC"
+    return None
+
+
+def _set_values(
+    device: str,
+    rng: np.random.Generator,
+    params: dict[str, object] | None = None,
+    *,
+    phenotype: str = "",
+) -> dict[str, float]:
+    """In-bounds settings; prefer fitted quantile edges when the pack carries them."""
+
+    def _draw(field: str, lo: float, hi: float, ndigits: int) -> float:
+        # Always clamp to consortium outlier bounds so MIMIC quantile edges that
+        # contain charting errors cannot emit non-conformant set values.
+        try:
+            blo, bhi = bounds("respiratory_support", field)
+            lo, hi = max(lo, blo), min(hi, bhi)
+        except Exception:
+            pass
+        edges = (params or {}).get(f"{field}_quantile_bin_edges")
+        if isinstance(edges, list) and len(edges) >= 2:
+            clean = [float(e) for e in edges if e is not None and lo <= float(e) <= hi]
+            if len(clean) >= 2:
+                i = int(rng.integers(0, len(clean) - 1))
+                a, b = clean[i], clean[i + 1]
+                if a > b:
+                    a, b = b, a
+                if a == b:
+                    return round(a, ndigits)
+                return round(float(rng.uniform(a, b)), ndigits)
+        return round(float(rng.uniform(lo, hi)), ndigits)
+
+    # Type-2 / OHS NIPPV runs higher EPAP/IPAP than garden-variety hypoxemic NIV.
+    if device == "NIPPV" and phenotype.startswith("type2"):
+        if phenotype == "type2_ohs":
+            peep_lo, peep_hi = 8.0, 14.0
+            ps_lo, ps_hi = 10.0, 20.0
+        elif phenotype == "type2_hf":
+            peep_lo, peep_hi = 6.0, 12.0
+            ps_lo, ps_hi = 8.0, 16.0
+        else:  # type2_copd
+            peep_lo, peep_hi = 5.0, 10.0
+            ps_lo, ps_hi = 8.0, 18.0
+        pool = {
+            "fio2_set": _draw("fio2_set", 0.28, 0.50, 2),
+            "lpm_set": round(float(rng.uniform(1.0, 6.0)), 1),
+            "tidal_volume_set": _draw("tidal_volume_set", 380.0, 500.0, 0),
+            "resp_rate_set": _draw("resp_rate_set", 12.0, 22.0, 0),
+            "peep_set": _draw("peep_set", peep_lo, peep_hi, 0),
+            "pressure_support_set": round(float(rng.uniform(ps_lo, ps_hi)), 0),
+        }
+    else:
+        pool = {
+            "fio2_set": _draw("fio2_set", 0.3, 0.7, 2),
+            "lpm_set": round(
+                float(
+                    rng.uniform(30.0, 55.0) if device == "High Flow NC" else rng.uniform(1.0, 6.0)
+                ),
+                1,
+            ),
+            "tidal_volume_set": _draw("tidal_volume_set", 380.0, 500.0, 0),
+            "resp_rate_set": _draw("resp_rate_set", 12.0, 22.0, 0),
+            "peep_set": _draw("peep_set", 5.0, 12.0, 0),
+            "pressure_support_set": round(float(rng.uniform(5.0, 15.0)), 0),
+        }
     return {field: pool[field] for field in DEVICE_SET_FIELDS[device]}
 
 
@@ -246,29 +357,45 @@ def sample_respiratory_support(
     params = block.get("params", {}) if isinstance(block, dict) else {}
     enrich = bool(params.get("enrich_devices"))
     l2_noninvasive = bool(params.get("l2_resp_noninvasive"))
-    low_flow = (
-        _LOW_FLOW_DEVICES[int(rng.integers(len(_LOW_FLOW_DEVICES)))] if enrich else "Nasal Cannula"
-    )
+    phenotype = getattr(spine, "resp_phenotype", "") or ""
+    # Type-2 pathways prefer Face Mask at L1; type-1 sticks to NC.
+    if phenotype.startswith("type2"):
+        low_flow = "Face Mask" if enrich and rng.random() < 0.45 else "Nasal Cannula"
+    else:
+        low_flow = (
+            _LOW_FLOW_DEVICES[int(rng.integers(len(_LOW_FLOW_DEVICES)))]
+            if enrich
+            else "Nasal Cannula"
+        )
     niv = _NIV_DEVICES[int(rng.integers(len(_NIV_DEVICES)))] if enrich else "High Flow NC"
 
-    # New gated path: when the pack carries an ``niv`` target, non-invasive support
-    # is assigned once per stay at its real per-stay prevalence (rather than minted
-    # for every ICU-floor stay, which over-produced NIPPV/HFNC several-fold). Drawn
-    # here so the assignment is stable across the stay's segments.
+    # Stay-level NIV gate (MIMIC ~6–7% each). Phenotype chooses *which* NIV
+    # device when the stay is on the NIV path — not whether every L2 interval
+    # gets NIV (that overshot stay rates 5×).
     niv_target = params.get("niv")
     l2_niv: str | None = None
     if isinstance(niv_target, dict):
-        r = rng.random()
-        p_nippv = float(niv_target.get("nippv_prob", 0.0))
-        p_hfnc = float(niv_target.get("hfnc_prob", 0.0))
-        l2_niv = "NIPPV" if r < p_nippv else ("High Flow NC" if r < p_nippv + p_hfnc else None)
+        l2_niv = _phenotype_l2_niv(
+            phenotype,
+            rng,
+            p_nippv=float(niv_target.get("nippv_prob", 0.0)),
+            p_hfnc=float(niv_target.get("hfnc_prob", 0.0)),
+        )
+    elif phenotype == "type1":
+        # Demo / ungated packs: full clinical ladder so pathway tests hold.
+        l2_niv = "High Flow NC"
+    elif phenotype.startswith("type2"):
+        l2_niv = "NIPPV"
 
     # Per-interval (device, tracheostomy) with the latch + AE1 weaning rule.
     trach = 0
     imv_run = 0
     timeline: list[tuple[str, int]] = []
     for level, resp in zip(spine.support_level, spine.resp_flag, strict=True):
-        if niv_target is not None:
+        typed = _device_phenotype(level, phenotype, low_flow, l2_niv=l2_niv)
+        if typed is not None:
+            device = typed
+        elif niv_target is not None:
             device = _device_gated(level, l2_niv, low_flow)
         else:
             device = _device_for(level, resp, l2_noninvasive=l2_noninvasive)
@@ -293,7 +420,12 @@ def sample_respiratory_support(
         if idx < len(timeline) and timeline[idx] == timeline[seg_start]:
             continue
         device, seg_trach = timeline[seg_start]
-        sets = _set_values(device, rng)
+        sets = _set_values(
+            device,
+            rng,
+            params if isinstance(params, dict) else None,
+            phenotype=phenotype,
+        )
         rows.append(
             RespiratorySupportRow(
                 hospitalization_id=hid,

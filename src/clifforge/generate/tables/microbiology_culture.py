@@ -123,14 +123,33 @@ def sample_microbiology_culture(
     if los_hours <= 0:
         return []
 
-    n_cultures = int(rng.poisson(_CULTURES_PER_DAY * los_hours / 24.0))
+    block = pack.tables.get("microbiology_culture", {})
+    params = block.get("params", {}) if isinstance(block, dict) else {}
+    rate = float(params.get("cultures_per_icu_day", _CULTURES_PER_DAY))
+    fluid_m = params.get("fluid_category_marginal")
+    method_m = params.get("method_category_marginal")
+    organism_m = params.get("organism_category_marginal")
+    fluid_marginal = fluid_m if isinstance(fluid_m, dict) and fluid_m else _FLUID_MARGINAL
+    method_marginal = method_m if isinstance(method_m, dict) and method_m else _METHOD_MARGINAL
+    organism_marginal = (
+        organism_m if isinstance(organism_m, dict) and organism_m else _ORGANISM_MARGINAL
+    )
+
+    n_cultures = int(rng.poisson(rate * los_hours / 24.0))
     events: list[CultureEvent] = []
     for i in range(n_cultures):
         order = admit_dttm + timedelta(hours=float(rng.random()) * los_hours)
         collect = order + timedelta(minutes=float(rng.uniform(5.0, 60.0)))
         result = collect + timedelta(hours=float(rng.uniform(24.0, 72.0)))
-        organism = categorical(_ORGANISM_MARGINAL, rng)
-        grew = organism != NO_GROWTH
+        organism = categorical(organism_marginal, rng)
+        grew = organism != NO_GROWTH and organism is not None
+        if grew and organism not in _ORGANISM_GROUP:
+            # Fitted isolate without a prior group map — still emit category.
+            group = organism
+        elif grew:
+            group = _ORGANISM_GROUP[organism]
+        else:
+            group = NO_GROWTH
         events.append(
             CultureEvent(
                 patient_id=pid,
@@ -139,10 +158,10 @@ def sample_microbiology_culture(
                 order_dttm=order,
                 collect_dttm=collect,
                 result_dttm=result,
-                fluid_category=categorical(_FLUID_MARGINAL, rng),
-                method_category=categorical(_METHOD_MARGINAL, rng),
+                fluid_category=categorical(fluid_marginal, rng),
+                method_category=categorical(method_marginal, rng),
                 organism_category=organism if grew else None,
-                organism_group=_ORGANISM_GROUP[organism] if grew else NO_GROWTH,
+                organism_group=group,
             )
         )
     events.sort(key=lambda e: e.order_dttm)

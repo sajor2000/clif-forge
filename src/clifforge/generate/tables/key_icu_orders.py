@@ -20,11 +20,12 @@ import polars as pl
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["OrderRow", "key_icu_orders_frame", "sample_key_icu_orders"]
 
-#: Fraction of ICU stays that get a rehab consult (documented prevalence).
-_REHAB_PROB = 0.5
+#: Fraction of ICU stays that get a rehab consult (dashboard-prior).
+_REHAB_PROB = _DASH_RATES["key_icu_orders"]
 _TREAT_INTERVAL_HOURS = 24.0  # rehab treatments are ~daily once ordered
 _STATUS = "Completed"
 

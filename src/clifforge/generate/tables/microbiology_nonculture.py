@@ -39,6 +39,7 @@ from clifforge.generate._common import UTC_DATETIME, grid_step_hours
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import loader
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = [
     "NonCultureEvent",
@@ -48,9 +49,8 @@ __all__ = [
 
 _TABLE = "microbiology_nonculture"
 
-#: Expected panels per stay (documented sparsity constant, un-fitted). These are
-#: admission-workup tests, so the rate is per stay, not per day.
-_PANELS_PER_STAY = 0.6
+#: Expected panels per stay (dashboard-prior). Admission-workup tests, per stay.
+_PANELS_PER_STAY = _DASH_RATES["microbiology_nonculture"]
 
 #: The 2.1 method vocabulary for this table has exactly one member.
 _METHOD = "pcr"

@@ -73,12 +73,21 @@ _LAB_PANEL_INTERVAL_HOURS = 24.0
 #: the additive shift in log1p space (~doubles creatinine) — a documented R12
 #: clinical coupling, not a fitted quantity.
 _RENAL_MARKERS = frozenset({"creatinine", "bun"})
-_RENAL_LOG_SHIFT = 0.5
+_RENAL_LOG_SHIFT = 0.75
 #: Value-space equivalent of the log1p-space renal shift, for the empirical-quantile
 #: marginal path (which produces a value directly, not a log1p value): a multiplicative
-#: bump ``exp(_RENAL_LOG_SHIFT)`` (~1.65), so creatinine/bun still rise with renal
-#: failure. This is the ``expm1(log1p(v) + shift)`` coupling approximated as ``v * e^shift``.
+#: bump ``exp(_RENAL_LOG_SHIFT)`` (~2.1), so creatinine/bun still rise with renal
+#: failure and CRRT stays land in the top creat quartile (MIMIC high_creat|CRRT≈0.97).
 _RENAL_VALUE_FACTOR = float(np.exp(_RENAL_LOG_SHIFT))
+#: Progressive renal derangement: consecutive renal-flag hours scale the bump up
+#: toward full strength over ~12h so creat *rises* within a stay (sicker→sicker).
+_RENAL_RAMP_HOURS = 12.0
+
+#: Shock / hypoperfusion markers bumped when ``cv_flag`` is on (lactate rises with
+#: pressors and falling MAP — longitudinal pairing, not a free invention).
+_SHOCK_MARKERS = frozenset({"lactate"})
+_SHOCK_LOG_SHIFT = 0.4
+_SHOCK_VALUE_FACTOR = float(np.exp(_SHOCK_LOG_SHIFT))
 
 #: Collect delay after order (minutes) and result delay after collect (hours) —
 #: documented chem-panel priors, shorter than culture turnaround.
@@ -86,6 +95,48 @@ _COLLECT_DELAY_MINUTES = (5.0, 60.0)
 _RESULT_DELAY_HOURS = (0.5, 6.0)
 
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
+
+
+def _renal_run_hours(
+    renal_flag: list[bool], interval_idx: int, grid_step: float
+) -> float:
+    """Consecutive renal-flag hours ending at ``interval_idx`` (for rising creat)."""
+    run = 0
+    for j in range(interval_idx, -1, -1):
+        if not renal_flag[j]:
+            break
+        run += 1
+    return run * grid_step
+
+
+def _apply_clinical_lab_bumps(
+    lab: str,
+    value: float,
+    *,
+    renal: bool,
+    renal_frac: float,
+    shock: bool,
+    log_space: bool,
+) -> float:
+    """Apply R12 organ-failure bumps; renal ramps with consecutive flag hours."""
+    if renal and lab in _RENAL_MARKERS:
+        strength = 0.35 + 0.65 * min(1.0, renal_frac)
+        if log_space:
+            value += _RENAL_LOG_SHIFT * strength
+        else:
+            value *= 1.0 + (_RENAL_VALUE_FACTOR - 1.0) * strength
+    if shock and lab in _SHOCK_MARKERS:
+        if log_space:
+            value += _SHOCK_LOG_SHIFT
+        else:
+            value *= _SHOCK_VALUE_FACTOR
+    elif lab in _SHOCK_MARKERS and not shock:
+        # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ MIMIC).
+        if not log_space:
+            value = min(value, 3.0)
+        else:
+            value = min(value, float(np.log1p(3.0)))
+    return value
 
 
 @dataclass(frozen=True)
@@ -222,6 +273,12 @@ def sample_labs(
         )
         result_dttm = collect_dttm + timedelta(hours=float(rng.uniform(*_RESULT_DELAY_HOURS)))
         renal = spine.renal_flag[interval_idx]
+        shock = spine.cv_flag[interval_idx]
+        renal_frac = (
+            _renal_run_hours(spine.renal_flag, interval_idx, grid_step) / _RENAL_RAMP_HOURS
+            if renal
+            else 0.0
+        )
         for i, lab in enumerate(order):
             if not present_mask[i]:
                 continue
@@ -235,15 +292,22 @@ def sample_labs(
                 # draw counts are identical to the log-normal path.
                 u = float(ndtr(float(z[i])))
                 value = float(np.interp(u, LAB_QUANTILE_PROBS, grid))
-                if renal and lab in _RENAL_MARKERS:
-                    value *= _RENAL_VALUE_FACTOR  # R12 renal coupling (value space)
+                value = _apply_clinical_lab_bumps(
+                    lab, value, renal=renal, renal_frac=renal_frac, shock=shock, log_space=False
+                )
             else:
                 marg = marginals.get(lab)
                 if marg is None:
                     continue
                 log_val = marg["log_mean"] + marg["log_sd"] * float(z[i])
-                if renal and lab in _RENAL_MARKERS:
-                    log_val += _RENAL_LOG_SHIFT  # R12 renal coupling
+                log_val = _apply_clinical_lab_bumps(
+                    lab,
+                    log_val,
+                    renal=renal,
+                    renal_frac=renal_frac,
+                    shock=shock,
+                    log_space=True,
+                )
                 value = float(np.expm1(log_val))
             value = _clamp(value, lab)
             value = round(value, 4)

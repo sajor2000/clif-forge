@@ -55,6 +55,7 @@ from clifforge.reference import bounds
 __all__ = [
     "recalibrate_to_full_hospital",
     "recalibrate_to_network_median",
+    "recalibrate_mimic_icu",
     "repair_vitals_dispersion",
 ]
 
@@ -430,6 +431,8 @@ def recalibrate_to_network_median(
     med_params = dict(med.get("params", {}))
     med_params["vasopressor_per_stay"] = True
     med_params["vasopressor_cv_boost"] = vasopressor_cv_boost
+    med_params["sedation_per_imv"] = True
+    med_params["sedation_imv_prob"] = 0.85  # MIMIC P(sedation|IMV)
     med["params"] = med_params
     tables["medication_admin_continuous"] = med
     labs = dict(tables.get("labs", {}))
@@ -634,6 +637,8 @@ def recalibrate_to_full_hospital(
     med_params = dict(med.get("params", {}))
     med_params["vasopressor_per_stay"] = True
     med_params["vasopressor_cv_boost"] = vasopressor_cv_boost
+    med_params["sedation_per_imv"] = True
+    med_params["sedation_imv_prob"] = 0.85
     med["params"] = med_params
     tables["medication_admin_continuous"] = med
     labs = dict(tables.get("labs", {}))
@@ -648,3 +653,115 @@ def recalibrate_to_full_hospital(
     }
 
     return ParamPack(manifest=dict(pack.manifest), tables=tables)
+
+
+#: MIMIC-IV Ext CLIF ICU-cohort rates (ADT ``location_category == "icu"``).
+_MIMIC_ICU_IMV = 0.412
+_MIMIC_ICU_MORTALITY = 0.115
+_MIMIC_ICU_NIPPV = 0.064
+_MIMIC_ICU_HFNC = 0.069
+
+
+def recalibrate_mimic_icu(pack: ParamPack) -> ParamPack:
+    """Reshape a MIMIC all-28 pack with the **validated** ICU recalibrate path.
+
+    Applies the same spine tempering / sojourn scaling / terminal deterioration /
+    gated-NIV / CRRT machinery as :func:`recalibrate_to_network_median`, targeted
+    at **MIMIC ICU-cohort** rates (IMV ≈ 41%, mortality ≈ 11.5%, NIPPV/HFNC ≈
+    6–7%). Then restores fitted ADT front-door knobs so ED→ICU arrivals use the
+    validated ``arrival_location_marginal`` + ``direct_icu_frac`` path (and drops
+    ``admission_route_marginal``, which would otherwise override arrivals —
+    MIMIC has no ``osh`` route, so the coupled route alone never emits
+    direct-ICU).
+    """
+    orig_adt = copy.deepcopy(dict(pack.tables.get("adt", {}).get("params", {}) or {}))
+    orig_rs = copy.deepcopy(
+        dict(pack.tables.get("respiratory_support", {}).get("params", {}) or {})
+    )
+    orig_crrt = dict(pack.tables.get("crrt_therapy", {}).get("params", {}) or {})
+    orig_pos = dict(pack.tables.get("position", {}).get("params", {}) or {})
+
+    # Peak start near published IMV: terminal invents late IMV only for a fraction
+    # of never-ventilated deaths, so little tempering is needed.
+    out = recalibrate_to_network_median(
+        pack,
+        peak_imv_target=_MIMIC_ICU_IMV - 0.05,
+        mortality_target=_MIMIC_ICU_MORTALITY,
+        # ICU-conditional NIV rates (not all-hospital stay prevalence).
+        niv_nippv_prob=_MIMIC_ICU_NIPPV,
+        niv_hfnc_prob=_MIMIC_ICU_HFNC,
+        prone_prob_severe=float(orig_pos.get("prone_prob_severe", 0.026)),
+        # MIMIC vaso stay ~0.29 survivors / ~0.58 deaths — keep base cv low; terminal adds.
+        flag_target_prevalence={
+            "resp_flag": 0.5,
+            "cv_flag": 0.10,
+            "renal_flag": 0.055,
+            "neuro_flag": 0.2,
+        },
+        # Lift P(CRRT|creat≥2) toward MIMIC (~0.16); stay CRRT may land ~6–8%.
+        crrt_prob=0.95,
+    )
+    tables = out.tables
+
+    adt_params: dict[str, Any] = {"enrich_locations": True}
+    for key in (
+        "arrival_location_marginal",
+        "direct_icu_frac",
+        "hospital_type_marginal",
+        "location_type_marginal",
+        "location_category_marginal",
+    ):
+        if key in orig_adt:
+            adt_params[key] = orig_adt[key]
+    tables["adt"] = {
+        "n_records": pack.tables.get("adt", {}).get("n_records", 0),
+        "fitted": True,
+        "params": adt_params,
+    }
+    spine_params = dict(tables["spine"]["params"])
+    spine_params.pop("admission_route_marginal", None)
+    # MIMIC-matched terminal mix + conditionals (±2 pp targets from audit).
+    spine_params["terminal_archetype_mix"] = {
+        "abrupt": 0.25,
+        "prolonged": 0.50,
+        "comfort": 0.25,
+    }
+    spine_params["terminal_imv_prob"] = 0.22
+    # Steeper decedent physiology (clearer sicker→sicker story vs MIMIC's milder means).
+    spine_params["terminal_vaso_prob"] = 0.35
+    spine_params["terminal_renal_prob"] = 0.40
+    spine_params["ladder_cv_prob"] = 0.72
+    # Type-1 (NC→HFNC→IMV) vs type-2 OHS/HF/COPD (NIPPV→IMV) pathways.
+    spine_params["resp_phenotype_marginal"] = {
+        "type1": 0.40,
+        "type2_ohs": 0.08,
+        "type2_hf": 0.12,
+        "type2_copd": 0.15,
+        "unspecified": 0.25,
+    }
+    tables["spine"]["params"] = spine_params
+
+    rs_params = dict(tables.get("respiratory_support", {}).get("params", {}))
+    for key, val in orig_rs.items():
+        if key in {"niv", "enrich_devices"}:
+            continue
+        rs_params.setdefault(key, val)
+    rs_params["enrich_devices"] = True
+    tables["respiratory_support"] = {
+        "n_records": pack.tables.get("respiratory_support", {}).get("n_records", 0),
+        "fitted": True,
+        "params": rs_params,
+    }
+
+    crrt_params = dict(tables.get("crrt_therapy", {}).get("params", {}))
+    for key, val in orig_crrt.items():
+        if key == "crrt_prob":
+            continue
+        crrt_params.setdefault(key, val)
+    tables["crrt_therapy"] = {
+        "n_records": pack.tables.get("crrt_therapy", {}).get("n_records", 0),
+        "fitted": True,
+        "params": crrt_params,
+    }
+
+    return ParamPack(manifest=dict(out.manifest), tables=tables)

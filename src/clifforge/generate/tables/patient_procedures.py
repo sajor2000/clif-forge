@@ -30,6 +30,7 @@ import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference import loader
 
@@ -72,13 +73,27 @@ def sample_patient_procedures(
 ) -> list[ProcedureRow]:
     """Emit a rare billed procedure for a high-acuity stay (R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
-    if spine.n_intervals <= 0 or spine.peak_level < _MIN_SUPPORT_LEVEL:
-        return []
-    if rng.random() >= _PROCEDURE_PROB:
+    if spine.n_intervals <= 0:
         return []
 
-    codes = loader.code_list(_TABLE)
-    entry = codes[int(rng.integers(0, len(codes)))]
+    block = pack.tables.get("patient_procedures", {})
+    params = block.get("params", {}) if isinstance(block, dict) else {}
+    code_marginal = params.get("procedure_code_marginal")
+    if "stay_prevalence" in params:
+        if rng.random() >= float(params["stay_prevalence"]):
+            return []
+    else:
+        if spine.peak_level < _MIN_SUPPORT_LEVEL or rng.random() >= _PROCEDURE_PROB:
+            return []
+
+    if isinstance(code_marginal, dict) and code_marginal:
+        procedure_code = categorical(code_marginal, rng)
+        procedure_code_format = "CPT"
+    else:
+        codes = loader.code_list(_TABLE)
+        entry = codes[int(rng.integers(0, len(codes)))]
+        procedure_code = entry["procedure_code"]
+        procedure_code_format = entry["procedure_code_format"]
 
     grid_step = grid_step_hours(pack)
     # Performed somewhere in the stay, then billed afterwards.
@@ -91,8 +106,8 @@ def sample_patient_procedures(
             hospitalization_id=hid,
             billing_provider_id=f"{hid}-BILL",
             performing_provider_id=f"{hid}-PERF",
-            procedure_code=entry["procedure_code"],
-            procedure_code_format=entry["procedure_code_format"],
+            procedure_code=procedure_code,
+            procedure_code_format=procedure_code_format,
             procedure_billed_dttm=billed,
         )
     ]

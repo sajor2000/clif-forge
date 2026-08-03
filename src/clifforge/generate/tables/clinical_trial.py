@@ -35,13 +35,14 @@ from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["ClinicalTrialRow", "clinical_trial_frame", "sample_clinical_trial"]
 
 #: Trials recruit ventilated patients (support level 3+ on the ladder).
 _MIN_SUPPORT_LEVEL = 3
-#: Fraction of eligible stays enrolled (documented prior, un-fitted).
-_ENROLMENT_PROB = 0.05
+#: Fraction of eligible stays enrolled (dashboard-prior).
+_ENROLMENT_PROB = _DASH_RATES["clinical_trial"]
 
 #: Synthetic trial registry: id -> (name, arms). Not real NCT identifiers.
 _TRIALS: dict[str, tuple[str, tuple[str, ...]]] = {

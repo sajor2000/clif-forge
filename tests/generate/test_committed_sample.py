@@ -17,8 +17,8 @@ _FULL_SAMPLE = Path("sample_full_hospital")
 _BASE = Path("base_pack")
 
 pytestmark = pytest.mark.skipif(
-    not table_parquet_path(_SAMPLE, "hospitalization").exists() or not _BASE.exists(),
-    reason="requires the committed sample and base pack",
+    not table_parquet_path(_SAMPLE, "hospitalization").exists(),
+    reason="requires the committed sample",
 )
 
 
@@ -37,8 +37,9 @@ def _compare(sample_dir: Path) -> None:
     the one table nobody edits does not test reproducibility.
     """
     spec = load_spec(sample_dir / "spec.toml")
-    pack = spec_to_pack(spec, ParamPack.load(str(_BASE)))
-    regenerated = generate_dataset(pack, n_patients=_N, seed=42).tables
+    base_path = Path(spec.base_pack) if spec.base_pack else _BASE
+    pack = spec_to_pack(spec, ParamPack.load(str(base_path)))
+    regenerated = generate_dataset(pack, n_patients=_N, seed=spec.seed).tables
 
     compared = 0
     for table, regen in regenerated.items():

@@ -70,6 +70,15 @@ __all__ = [
     "fit_ar1_by_state",
     "fit_lab_copula",
     "fit_infusion_hazards",
+    "fit_stay_prevalence",
+    "fit_stay_prevalence_by_category",
+    "fit_code_status_rates",
+    "fit_top_k_category",
+    "fit_cultures_per_icu_day",
+    "fit_prone_rates",
+    "fit_age_quantiles",
+    "fit_adt_arrival",
+    "fit_admission_route_marginal",
     "nearest_positive_definite_correlation",
 ]
 
@@ -802,4 +811,357 @@ def fit_infusion_hazards(
 
     survived, audit = suppress(counts, hazards, min_n=min_n)
     params: dict[str, object] = {"infusion_hazards": survived}
+    return params, audit
+
+
+# --------------------------------------------------------------------------- #
+# Prior-table estimators (MIMIC Ext CLIF realism / all-28 pack)
+# --------------------------------------------------------------------------- #
+#: Code-status categories that count as a de-escalation from Full.
+_DNR_LIKE: frozenset[str] = frozenset(
+    {"DNR", "DNAR", "UDNR", "DNR/DNI", "DNAR/DNI", "DNI_only"}
+)
+_AND_LIKE: frozenset[str] = frozenset({"AND"})
+
+
+def fit_age_quantiles(
+    hospitalization: pl.DataFrame,
+    *,
+    column: str = "age_at_admission",
+    n_bins: int = 10,
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Empirical age quantiles for hospitalization (``age_at_admission_quantiles``)."""
+    if column not in hospitalization.columns:
+        return {}, []
+    col = hospitalization.select(pl.col(column).drop_nulls().cast(pl.Float64)).to_series()
+    n = col.len()
+    counts = {column: n}
+    probs = [i / n_bins for i in range(n_bins + 1)]
+    raw = [col.quantile(q, interpolation="linear") for q in probs]
+    edges = [round(float(e), 4) for e in raw if e is not None]
+    survived, audit = suppress(counts, {column: edges}, min_n=min_n)
+    if column not in survived or len(survived[column]) < 2:
+        return {}, audit
+    return {"age_at_admission_quantiles": survived[column]}, audit
+
+
+def fit_stay_prevalence(
+    df: pl.DataFrame,
+    n_hospitalizations: int,
+    *,
+    id_col: str = "hospitalization_id",
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Fraction of hospitalizations with ≥1 row in ``df`` (gated on stay count)."""
+    if id_col not in df.columns or n_hospitalizations <= 0:
+        return {}, []
+    n_with = int(df.select(pl.col(id_col).n_unique()).item())
+    counts = {"stay_prevalence": n_with}
+    raw = {"stay_prevalence": n_with / n_hospitalizations}
+    survived, audit = suppress(counts, raw, min_n=min_n)
+    if "stay_prevalence" not in survived:
+        return {}, audit
+    return {"stay_prevalence": round(float(survived["stay_prevalence"]), 6)}, audit
+
+
+def fit_stay_prevalence_by_category(
+    df: pl.DataFrame,
+    n_hospitalizations: int,
+    *,
+    category_col: str,
+    categories: Sequence[str],
+    id_col: str = "hospitalization_id",
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Per-category stay prevalence (e.g. IMV / NIPPV / HFNC among hospitalizations)."""
+    if id_col not in df.columns or category_col not in df.columns or n_hospitalizations <= 0:
+        return {}, []
+    counts: dict[str, int] = {}
+    raw: dict[str, float] = {}
+    for cat in categories:
+        n_with = int(
+            df.filter(pl.col(category_col) == cat).select(pl.col(id_col).n_unique()).item()
+        )
+        counts[cat] = n_with
+        raw[cat] = n_with / n_hospitalizations
+    survived, audit = suppress(counts, raw, min_n=min_n)
+    if not survived:
+        return {}, audit
+    return {
+        "stay_prevalence_by_category": {
+            cat: round(float(p), 6) for cat, p in survived.items()
+        }
+    }, audit
+
+
+def fit_code_status_rates(
+    code_status: pl.DataFrame,
+    hospitalization: pl.DataFrame,
+    *,
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Outcome-conditional DNR / comfort-care rates (patient-level table).
+
+    Emits ``dnr_prob_expired``, ``comfort_prob_expired`` (among DNR decedents),
+    and ``dnr_prob_survivor``, matching the code_status generator knobs.
+    """
+    if "patient_id" not in code_status.columns or "code_status_category" not in code_status.columns:
+        return {}, []
+    if "patient_id" not in hospitalization.columns or "discharge_category" not in hospitalization.columns:
+        return {}, []
+
+    flags = (
+        code_status.group_by("patient_id")
+        .agg(pl.col("code_status_category").alias("_cats"))
+        .with_columns(
+            pl.col("_cats")
+            .list.eval(pl.element().is_in(list(_DNR_LIKE)))
+            .list.any()
+            .alias("has_dnr"),
+            pl.col("_cats")
+            .list.eval(pl.element().is_in(list(_AND_LIKE)))
+            .list.any()
+            .alias("has_and"),
+        )
+        .select("patient_id", "has_dnr", "has_and")
+    )
+    outcomes = hospitalization.group_by("patient_id").agg(
+        (pl.col("discharge_category") == "Expired").any().alias("expired")
+    )
+    joined = flags.join(outcomes, on="patient_id", how="inner")
+    expired = joined.filter(pl.col("expired"))
+    survivors = joined.filter(~pl.col("expired"))
+
+    params: dict[str, object] = {}
+    audit: list[SuppressionRecord] = []
+
+    def _rate(subset: pl.DataFrame, col: str, key: str) -> None:
+        n = subset.height
+        if n == 0:
+            return
+        rate = float(subset.select(pl.col(col).mean()).item() or 0.0)
+        survived, records = suppress({key: n}, {key: rate}, min_n=min_n)
+        audit.extend(records)
+        if key in survived:
+            params[key] = round(float(survived[key]), 6)
+
+    _rate(expired, "has_dnr", "dnr_prob_expired")
+    _rate(survivors, "has_dnr", "dnr_prob_survivor")
+
+    dnr_expired = expired.filter(pl.col("has_dnr"))
+    n_dnr = dnr_expired.height
+    if n_dnr > 0:
+        comfort = float(dnr_expired.select(pl.col("has_and").mean()).item() or 0.0)
+        survived, records = suppress(
+            {"comfort_prob_expired": n_dnr}, {"comfort_prob_expired": comfort}, min_n=min_n
+        )
+        audit.extend(records)
+        if "comfort_prob_expired" in survived:
+            params["comfort_prob_expired"] = round(float(survived["comfort_prob_expired"]), 6)
+
+    # Category marginal for generators that sample terminal status directly.
+    cat_params, cat_audit = fit_categorical_marginals(
+        code_status, ["code_status_category"], min_n=min_n
+    )
+    params.update(cat_params)
+    audit.extend(cat_audit)
+    return params, audit
+
+
+def fit_top_k_category(
+    df: pl.DataFrame,
+    field: str,
+    *,
+    k: int = 40,
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Top-``k`` category proportions; long tail dropped (survives leakage scan)."""
+    if field not in df.columns:
+        return {}, []
+    vc = (
+        df.select(pl.col(field).drop_nulls().cast(pl.String))
+        .to_series()
+        .value_counts(sort=True)
+    )
+    if vc.height == 0:
+        return {}, []
+    top = vc.head(k)
+    counts = {str(row[0]): int(row[1]) for row in top.iter_rows()}
+    total = sum(counts.values())
+    if total == 0:
+        return {}, []
+    raw = {cat: n / total for cat, n in counts.items()}
+    survived, audit = suppress(counts, raw, min_n=min_n)
+    surviving_total = sum(survived.values())
+    if surviving_total <= 0:
+        return {}, audit
+    return {
+        f"{field}_marginal": {
+            cat: prop / surviving_total for cat, prop in survived.items()
+        }
+    }, audit
+
+
+def fit_cultures_per_icu_day(
+    cultures: pl.DataFrame,
+    adt: pl.DataFrame | None,
+    *,
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Aggregate cultures / ICU-day from ADT ICU location windows."""
+    n_cult = cultures.height
+    if n_cult < min_n:
+        audit = [
+            SuppressionRecord(cell=("cultures_per_icu_day",), n=n_cult, fallback_kind="none")
+        ]
+        return {}, audit
+    icu_days = 0.0
+    if (
+        adt is not None
+        and "location_category" in adt.columns
+        and "in_dttm" in adt.columns
+        and "out_dttm" in adt.columns
+    ):
+        hours = (
+            adt.filter(pl.col("location_category") == "icu")
+            .select(((pl.col("out_dttm") - pl.col("in_dttm")).dt.total_hours()).sum())
+            .item()
+        )
+        icu_days = float(hours or 0.0) / 24.0
+    if icu_days <= 0:
+        return {}, []
+    rate = n_cult / icu_days
+    return {"cultures_per_icu_day": round(rate, 6)}, []
+
+
+def fit_adt_arrival(
+    adt: pl.DataFrame,
+    *,
+    icu_location: str = "icu",
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Fit the validated ADT front-door knobs from real first-location segments.
+
+    Emits the same parameter names the ADT generator already consumes
+    (``arrival_location_marginal``, ``direct_icu_frac``) — the path exercised by
+    full-hospital / network-median recalibration — so MIMIC realism plugs into the
+    proven arrival machinery rather than inventing a parallel one.
+
+    * ``arrival_location_marginal`` — first ``location_category`` among stays that
+      ever visit ICU (the synthetic ICU cohort's front door).
+    * ``direct_icu_frac`` — among those ICU-reaching stays, fraction whose first
+      segment is already ``icu``.
+    """
+    need = {"hospitalization_id", "location_category", "in_dttm"}
+    if not need.issubset(adt.columns):
+        return {}, []
+
+    first = (
+        adt.sort("in_dttm")
+        .group_by("hospitalization_id")
+        .agg(pl.col("location_category").first().alias("_arrival"))
+    )
+    icu_ids = (
+        adt.filter(pl.col("location_category") == icu_location)
+        .select("hospitalization_id")
+        .unique()
+    )
+    cohort = first.join(icu_ids, on="hospitalization_id", how="inner")
+    n = cohort.height
+    if n < min_n:
+        return {}, [
+            SuppressionRecord(cell=("arrival_location_marginal",), n=n, fallback_kind="none")
+        ]
+
+    vc = cohort["_arrival"].value_counts(sort=True)
+    counts = {str(row[0]): int(row[1]) for row in vc.iter_rows() if row[0] is not None}
+    total = sum(counts.values())
+    raw = {cat: c / total for cat, c in counts.items()}
+    survived, audit = suppress(counts, raw, min_n=min_n)
+    surviving_total = sum(survived.values())
+    params: dict[str, object] = {}
+    if surviving_total > 0:
+        params["arrival_location_marginal"] = {
+            cat: prop / surviving_total for cat, prop in survived.items()
+        }
+
+    n_direct = int(cohort.filter(pl.col("_arrival") == icu_location).height)
+    s2, a2 = suppress(
+        {"direct_icu_frac": n},
+        {"direct_icu_frac": n_direct / n},
+        min_n=min_n,
+    )
+    audit.extend(a2)
+    if "direct_icu_frac" in s2:
+        params["direct_icu_frac"] = round(float(s2["direct_icu_frac"]), 6)
+    return params, audit
+
+
+def fit_admission_route_marginal(
+    hospitalization: pl.DataFrame,
+    *,
+    field: str = "admission_type_category",
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Fit the coupled spine ``admission_route_marginal`` from admission types.
+
+    Same knob full-hospital recalibration sets: one draw per stay drives both
+    hospitalization ``admission_type_category`` and the ADT front door via
+    ``adt._ROUTE_TO_ARRIVAL``.
+    """
+    if field not in hospitalization.columns:
+        return {}, []
+    params, audit = fit_categorical_marginals(hospitalization, [field], min_n=min_n)
+    marginal = params.get(f"{field}_marginal")
+    if not isinstance(marginal, dict) or not marginal:
+        return {}, audit
+    return {"admission_route_marginal": dict(marginal)}, audit
+
+
+def fit_prone_rates(
+    position: pl.DataFrame,
+    respiratory_support: pl.DataFrame | None,
+    *,
+    min_n: int = 20,
+) -> EstimatorResult:
+    """Prone chart probability overall and among IMV stays (position generator knobs).
+
+    Emits ``prone_prob_otherwise`` (global chart rate) and, when IMV stays are
+    available, ``prone_prob_severe`` as the prone-chart rate among IMV stays.
+    """
+    if "position_category" not in position.columns:
+        return {}, []
+    n = position.height
+    prone_n = int(position.filter(pl.col("position_category") == "prone").height)
+    counts = {"prone_prob_otherwise": n}
+    raw = {"prone_prob_otherwise": prone_n / n if n else 0.0}
+    survived, audit = suppress(counts, raw, min_n=min_n)
+    params: dict[str, object] = {}
+    if "prone_prob_otherwise" in survived:
+        params["prone_prob_otherwise"] = round(float(survived["prone_prob_otherwise"]), 6)
+
+    if (
+        respiratory_support is not None
+        and "device_category" in respiratory_support.columns
+        and "hospitalization_id" in respiratory_support.columns
+        and "hospitalization_id" in position.columns
+    ):
+        imv_ids = (
+            respiratory_support.filter(pl.col("device_category") == "IMV")
+            .select("hospitalization_id")
+            .unique()
+        )
+        imv_pos = position.join(imv_ids, on="hospitalization_id", how="inner")
+        n_imv = imv_pos.height
+        if n_imv > 0:
+            prone_imv = int(imv_pos.filter(pl.col("position_category") == "prone").height)
+            s2, a2 = suppress(
+                {"prone_prob_severe": n_imv},
+                {"prone_prob_severe": prone_imv / n_imv},
+                min_n=min_n,
+            )
+            audit.extend(a2)
+            if "prone_prob_severe" in s2:
+                params["prone_prob_severe"] = round(float(s2["prone_prob_severe"]), 6)
     return params, audit

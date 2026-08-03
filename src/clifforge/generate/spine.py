@@ -44,6 +44,7 @@ from clifforge.generate.semimarkov import SojournSampler
 
 __all__ = [
     "FLAG_NAMES",
+    "RESP_PHENOTYPES",
     "SpineFrame",
     "sample_spine",
     "truth_frame",
@@ -67,6 +68,12 @@ class SpineFrame:
     the ADT arrival location in agreement per stay: both generators read it. Its
     values are mCIDE ``admission_type_category`` members (``ed``, ``elective``,
     ``direct``, ``osh``, ``facility``, ``other``).
+
+    ``resp_phenotype`` is a per-stay respiratory-failure pathway (KTD-6):
+    ``type1`` (hypoxemic: NC→HFNC→IMV), ``type2_ohs`` / ``type2_hf`` /
+    ``type2_copd`` (hypercapnic / OHS / HF: NIPPV→IMV), or ``""`` / ``unspecified``
+    (gated NIV mix). Downstream RS and diagnosis tables read it; they never
+    invent the pathway themselves.
     """
 
     hospitalization_id: str
@@ -77,6 +84,7 @@ class SpineFrame:
     neuro_flag: list[bool]
     outcome: str
     admission_route: str = ""
+    resp_phenotype: str = ""
 
     @property
     def n_intervals(self) -> int:
@@ -100,6 +108,7 @@ class SpineFrame:
                 "neuro_flag": self.neuro_flag,
                 "outcome": [self.outcome] * n,
                 "admission_route": [self.admission_route] * n,
+                "resp_phenotype": [self.resp_phenotype] * n,
             }
         )
 
@@ -268,13 +277,29 @@ def sample_spine(
             grid_step_hours,
             rng,
             mix=params.get("terminal_archetype_mix"),
+            imv_prob=float(params.get("terminal_imv_prob", _DEFAULT_TERMINAL_IMV_PROB)),
+            vaso_prob=float(params.get("terminal_vaso_prob", _DEFAULT_TERMINAL_VASO_PROB)),
+            renal_prob=float(params.get("terminal_renal_prob", _DEFAULT_TERMINAL_RENAL_PROB)),
         )
 
-    # Coupled admission route (drawn LAST so it never shifts the earlier draws).
-    # Only drawn when the pack carries the marginal; otherwise the rng is untouched
-    # and the route stays "" (backward compatible, R22).
+    # Soft ladder→organ re-couple: the support ladder's clinical meaning is
+    # L4 = +vaso, L5 = +CRRT. Recalibrate's ``flag_target_prevalence`` deliberately
+    # decouples marginal rates, but leaving L4/L5 stays without cv/renal flags makes
+    # vitals/labs/meds/resp disagree longitudinally ("sicker" acuity without shock
+    # physiology). Soft Bernoulli on L4→cv keeps MIMIC vaso|IMV (~0.60).
+    _recouple_ladder_organs(
+        support_level,
+        flags,
+        rng,
+        ladder_cv_prob=float(params.get("ladder_cv_prob", _DEFAULT_LADDER_CV_PROB)),
+    )
+
+    # Coupled admission route + respiratory phenotype (drawn LAST so they never
+    # shift the earlier draws). Absent marginals leave "" (backward compatible).
     route_marginal = params.get("admission_route_marginal")
     admission_route = categorical(route_marginal, rng) if route_marginal else ""
+    pheno_marginal = params.get("resp_phenotype_marginal") or _DEFAULT_RESP_PHENOTYPE_MIX
+    resp_phenotype = categorical(pheno_marginal, rng)
 
     return SpineFrame(
         hospitalization_id=hospitalization_id,
@@ -285,7 +310,26 @@ def sample_spine(
         neuro_flag=flags["neuro_flag"],
         outcome=outcome,
         admission_route=admission_route,
+        resp_phenotype=resp_phenotype,
     )
+
+
+#: Respiratory-failure pathways (per-stay). Typed pathways drive NC→HFNC→IMV
+#: (type1) or NIPPV→IMV (type2_*); unspecified keeps the gated NIV mix.
+RESP_PHENOTYPES: tuple[str, ...] = (
+    "type1",
+    "type2_ohs",
+    "type2_hf",
+    "type2_copd",
+    "unspecified",
+)
+_DEFAULT_RESP_PHENOTYPE_MIX: dict[str, float] = {
+    "type1": 0.40,
+    "type2_ohs": 0.08,
+    "type2_hf": 0.12,
+    "type2_copd": 0.15,
+    "unspecified": 0.25,
+}
 
 
 #: Terminal-decline archetypes and their default mix. Real ICU deaths are not a
@@ -296,6 +340,40 @@ _DEFAULT_TERMINAL_ARCHETYPE_MIX: dict[str, float] = {
     "prolonged": 0.5,
     "comfort": 0.2,
 }
+
+#: Ladder rungs whose clinical meaning implies organ support (soft re-couple).
+_VASO_MIN_SUPPORT_LEVEL = 4
+_CRRT_MIN_SUPPORT_LEVEL = 5
+
+#: MIMIC ICU conditionals (±2 pp targets for ``recalibrate_mimic_icu``).
+#: ``terminal_imv_prob`` = P(invent late IMV | death ∧ never-IMV), not stay-level.
+_DEFAULT_TERMINAL_IMV_PROB = 0.20
+_DEFAULT_TERMINAL_VASO_PROB = 0.58
+_DEFAULT_TERMINAL_RENAL_PROB = 0.40
+#: Soft L4→cv re-couple rate so vaso|IMV lands near MIMIC (~0.60), not 1.0.
+_DEFAULT_LADDER_CV_PROB = 0.55
+
+
+def _recouple_ladder_organs(
+    support_level: list[int],
+    flags: dict[str, list[bool]],
+    rng: np.random.Generator,
+    *,
+    ladder_cv_prob: float = _DEFAULT_LADDER_CV_PROB,
+) -> None:
+    """Soft-couple cv/renal flags to ladder rungs that clinically imply them.
+
+    L4 = IMV+vaso, L5 = +CRRT. Coupling is a **stay-level** Bernoulli when any
+    L4+ interval exists (per-interval draws made long L4 runs saturate to cv=1
+    and blew past MIMIC vaso|IMV / vaso|death). L5→renal stays hard (rare).
+    """
+    has_l4 = any(level >= _VASO_MIN_SUPPORT_LEVEL for level in support_level)
+    couple_cv = has_l4 and rng.random() < ladder_cv_prob
+    for i, level in enumerate(support_level):
+        if couple_cv and level >= _VASO_MIN_SUPPORT_LEVEL:
+            flags["cv_flag"][i] = True
+        if level >= _CRRT_MIN_SUPPORT_LEVEL:
+            flags["renal_flag"][i] = True
 
 
 def _pick_terminal_archetype(mix: dict[str, float], rng: np.random.Generator) -> str:
@@ -317,6 +395,10 @@ def _apply_terminal_deterioration(
     grid_step_hours: float,
     rng: np.random.Generator,
     mix: dict[str, float] | None = None,
+    *,
+    imv_prob: float = _DEFAULT_TERMINAL_IMV_PROB,
+    vaso_prob: float = _DEFAULT_TERMINAL_VASO_PROB,
+    renal_prob: float = _DEFAULT_TERMINAL_RENAL_PROB,
 ) -> None:
     """Shape the final window of an expiring trajectory into a terminal decline.
 
@@ -328,14 +410,13 @@ def _apply_terminal_deterioration(
     drive vitals; the renal flag drives creatinine/BUN), never by reading another
     table (KTD-6):
 
-    * ``abrupt`` — a short, steep collapse to the acuity ceiling with all organs
-      failing (sudden arrest).
-    * ``prolonged`` — a laddered climb L3 -> L5 with organs failing in sequence
-      (respiratory, then cardiovascular, then renal).
-    * ``comfort`` — withdrawal: support is **de-escalated** toward comfort while
-      organ failure persists (rising renal markers), so acuity falls near death.
+    * ``abrupt`` — a short, steep collapse when vented; shock/renal by Bernoulli.
+    * ``prolonged`` — laddered climb among IMV deaths; organs fail in sequence.
+    * ``comfort`` — device withdrawal; optional shock physiology without inventing
+      IMV on every death (MIMIC: ~33% of ICU deaths never receive IMV).
 
-    ``abrupt``/``prolonged`` only raise acuity; ``comfort`` may lower it.
+    Stay-level Bernoulli draws (``imv_prob`` / ``vaso_prob`` / ``renal_prob``)
+    target MIMIC conditionals P(IMV|death)≈0.67, P(vaso|death)≈0.58.
     """
     n = len(support_level)
     if n == 0:
@@ -345,23 +426,46 @@ def _apply_terminal_deterioration(
     n_term = max(1, full_window // 3) if archetype == "abrupt" else full_window
     start = max(0, n - n_term)
     span = n - start
+    pre_peak = max(support_level[:start], default=max(support_level, default=0))
+    already_imv = pre_peak >= 3
+    # ``imv_prob`` is the *invent* rate among never-ventilated deaths. Already-IMV
+    # decedents stay counted; together they target MIMIC P(IMV|expired)≈0.67.
+    do_imv = already_imv or (rng.random() < imv_prob)
+    do_vaso = rng.random() < vaso_prob
+    do_renal = rng.random() < renal_prob
+
     for i in range(start, n):
         frac = (i - start + 1) / span  # 0..1 across the terminal window
         if archetype == "comfort":
-            support_level[i] = max(2, 4 - int(round(2.0 * frac)))  # withdraw toward comfort
-            flags["resp_flag"][i] = True
-            flags["renal_flag"][i] = True
-        elif archetype == "abrupt":
-            support_level[i] = max(support_level[i], 4 + int(round(frac)))  # steep to ceiling
-            flags["resp_flag"][i] = True
-            flags["cv_flag"][i] = True
-            flags["renal_flag"][i] = True
-        else:  # prolonged — laddered multi-organ failure, topping at high vent (L4)
-            support_level[i] = max(support_level[i], 3 + int(round(frac)))
-            flags["resp_flag"][i] = True
-            if frac >= 0.34:
+            if do_imv:
+                support_level[i] = max(3, 5 - int(round(2.0 * frac)))
+                flags["resp_flag"][i] = True
+            else:
+                # Withdraw to ICU floor — no invented IMV on comfort deaths.
+                support_level[i] = min(support_level[i], max(2, 3 - int(round(frac))))
+            if do_vaso:
                 flags["cv_flag"][i] = True
-            if frac >= 0.67:
+            if do_renal:
+                flags["renal_flag"][i] = True
+        elif archetype == "abrupt":
+            if do_imv:
+                support_level[i] = max(support_level[i], 4 + int(round(frac)))
+                flags["resp_flag"][i] = True
+            else:
+                support_level[i] = max(support_level[i], 2)
+            if do_vaso:
+                flags["cv_flag"][i] = True
+            if do_renal:
+                flags["renal_flag"][i] = True
+        else:  # prolonged
+            if do_imv:
+                support_level[i] = max(support_level[i], 3 + int(round(frac)))
+                flags["resp_flag"][i] = True
+            else:
+                support_level[i] = max(support_level[i], 2)
+            if do_vaso and frac >= 0.34:
+                flags["cv_flag"][i] = True
+            if do_renal and frac >= 0.67:
                 flags["renal_flag"][i] = True
 
 
@@ -390,6 +494,7 @@ def truth_frame(spines: list[SpineFrame]) -> pl.DataFrame:
                 "neuro_flag": pl.Boolean,
                 "outcome": pl.String,
                 "admission_route": pl.String,
+                "resp_phenotype": pl.String,
             }
         )
     return pl.concat([s.to_polars() for s in spines], how="vertical")

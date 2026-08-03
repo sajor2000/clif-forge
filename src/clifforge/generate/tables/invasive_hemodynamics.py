@@ -40,6 +40,7 @@ from clifforge.fit.param_pack import ParamPack
 from clifforge.generate._common import UTC_DATETIME, grid_step_hours
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = [
     "HemodynamicRow",
@@ -48,6 +49,12 @@ __all__ = [
 ]
 
 _MEASURE_INTERVAL_HOURS = 6.0  # hemodynamics charted a few times a day
+#: Unconditional stay-level PA-catheter prevalence (clif-icu.com dashboard).
+_STAY_PREVALENCE = _DASH_RATES["invasive_hemodynamics"]
+#: Approximate ICU cv-failure stay share under recalibrate; converts dashboard
+#: stay rate into P(PA catheter | any cv_flag) — only shocked patients get lines.
+_CV_STAY_SHARE = 0.27
+_CV_CONDITIONAL_PREVALENCE = min(1.0, _STAY_PREVALENCE / _CV_STAY_SHARE)
 #: A standard PA-catheter measure set, weighted toward the routinely-charted ones.
 _MEASURE_MARGINAL = {
     "cvp": 0.3,
@@ -118,8 +125,16 @@ def sample_invasive_hemodynamics(
     hospitalization_id: str | None = None,
     admit_dttm: datetime = _DEFAULT_ADMIT,
 ) -> list[HemodynamicRow]:
-    """Emit PA-catheter measurements during cv-failure windows (R5, R22)."""
+    """Emit PA-catheter measurements during cv-failure windows (R5, R22).
+
+    Clinical prior: invasive hemo is for shock — gate on ``cv_flag`` with
+    P(catheter|cv) from the dashboard stay rate, never on non-shock stays.
+    """
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
+    if not any(spine.cv_flag):
+        return []
+    if rng.random() >= _CV_CONDITIONAL_PREVALENCE:
+        return []
     grid_step = grid_step_hours(pack)
     intervals = _measure_intervals(spine.cv_flag, grid_step)
     if not intervals:

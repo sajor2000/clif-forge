@@ -48,6 +48,15 @@ __all__ = ["VITALS", "VitalObservation", "sample_vitals", "vitals_frame"]
 #: by U5, so they are omitted rather than fabricated (R15).
 VITALS = ("heart_rate", "sbp", "dbp", "map", "respiratory_rate", "spo2", "temp_c")
 
+#: Hemodynamic vitals that track shock: when ``cv_flag`` is on, use at least the
+#: L4 (vaso) state params so MAP/SBP fall with cardiovascular failure even if the
+#: support ladder was tempered (longitudinal sicker↔sicker pairing).
+_HEMODYNAMIC_VITALS = frozenset({"sbp", "dbp", "map", "heart_rate"})
+_SHOCK_PHYSIOLOGY_LEVEL = 4  # vaso-tier MAP when cv_flag is on
+#: Gas-exchange vitals: hypoxemia tracks respiratory failure / IMV (resp_flag or L≥3).
+_RESP_VITALS = frozenset({"spo2", "respiratory_rate"})
+_RESP_PHYSIOLOGY_LEVEL = 3
+
 
 #: Per-interval probability that a vital is observed. Un-fitted cadence heuristics
 #: (like the adt hospital constants): dense but not certain in the ICU, sparse on
@@ -132,8 +141,28 @@ def sample_vitals(
 
         value: float | None = None
         for interval_idx, level in enumerate(spine.support_level):
-            state = _state_params(by_state, level)
+            # Soft physiology boost: cv-failure intervals read vaso-tier state means
+            # so blood pressure declines with shock (paired with vaso meds / IMV).
+            phys_level = level
+            mean_shift = 0.0
+            if (
+                vital in _HEMODYNAMIC_VITALS
+                and interval_idx < len(spine.cv_flag)
+                and spine.cv_flag[interval_idx]
+            ):
+                phys_level = max(level, _SHOCK_PHYSIOLOGY_LEVEL)
+            elif vital in _RESP_VITALS and (
+                level >= _RESP_PHYSIOLOGY_LEVEL
+                or (
+                    interval_idx < len(spine.resp_flag) and spine.resp_flag[interval_idx]
+                )
+            ):
+                phys_level = max(level, _RESP_PHYSIOLOGY_LEVEL)
+                if vital == "spo2":
+                    mean_shift = -2.5 if level >= 3 else -1.0
+            state = _state_params(by_state, phys_level)
             mean, phi, sigma = state["mean"], state["phi"], state["sigma"]
+            mean = mean + mean_shift
             if value is None:
                 value = mean  # warm-start at the state mean
             else:
