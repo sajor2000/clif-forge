@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Collection
 from functools import cache, lru_cache
 from pathlib import Path
-from typing import Any, Collection
+from typing import Any
 
 _DATA_ROOT = Path(__file__).parent / "data"
 _MANIFEST_PATH = _DATA_ROOT / "manifest.json"
