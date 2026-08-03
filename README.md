@@ -283,7 +283,7 @@ recipes produce the same dataset, and every one is reproducible from its recipe.
 uv run clif-forge generate --preset high-acuity --n-patients 5000 --out ./my-dataset
 ```
 
-Shipped presets: `high-acuity`, `older-cohort`, `sepsis-heavy` (see [`presets/`](presets/)).
+Shipped presets: `high-acuity`, `older-cohort`, `sepsis-heavy`, `rare-support` (see [`presets/`](presets/)).
 
 **Your own spec** — a variant is a small TOML recipe (every field defaults to the
 master; a minimal spec reproduces it). The `mode` picks the population shape:
@@ -333,7 +333,7 @@ derivative:
 | **Population shape** | `mode` | `icu` \| `full_hospital` |
 | **Size** | `n` / `--n-patients` | any count; chunked + collision-free |
 | **Demographics** | `age_shift`, `hispanic_frac`, `race_target` | relative to the base pack |
-| **Illness rates** (ICU) | `imv`, `mortality_scale`, `vaso_frac`, `crrt_prob`, `prone_severe` | organ-support and death targets |
+| **Illness rates** (ICU) | `imv`, `mortality_scale`, `vaso_frac`, `crrt_prob`, `prone_severe`, `ecmo_stay` | organ-support and death targets; `ecmo_stay` for rare-event teaching |
 | **Resources** | `--chunk-size`, `--max-threads` | RAM and CPU dials (see System requirements) |
 | **Seed** | `seed` / `--seed` | one seed → byte-identical output |
 
@@ -451,10 +451,11 @@ Pages at **https://sajor2000.github.io/clif-forge/** (source: [`site/`](site/)).
 | [`sample_full_hospital/`](sample_full_hospital) | Committed whole-hospital sample (~5k) — same layout |
 | [`demo_output/`](demo_output) | Tiny hand-specified demo (n=100) with a generated `REPORT.md` |
 | [`data/param_packs/`](data/param_packs) | Fitted packs (e.g. `icu_all28`) used by committed samples |
-| [`presets/`](presets) | Shipped example recipes (`high-acuity`, `older-cohort`, `sepsis-heavy`) — see [`presets/README.md`](presets/README.md) |
+| [`presets/`](presets) | Shipped example recipes (`high-acuity`, `older-cohort`, `sepsis-heavy`, `rare-support`) — see [`presets/README.md`](presets/README.md) |
 | [`scripts/`](scripts) | Deliverable generation, base-pack build, synthetic-vs-real validation, release gate |
 | [`site/`](site) | The landing page + validation report (published to GitHub Pages) |
-| [`docs/`](docs) | Reproducibility, the consortium announcement, and design plans — see [`docs/README.md`](docs/README.md) |
+| [`docs/`](docs) | Reproducibility, consortium announcement, design plans, and [`docs/solutions/`](docs/solutions) learnings — see [`docs/README.md`](docs/README.md) |
+| [`CONCEPTS.md`](CONCEPTS.md) | Shared domain vocabulary (param pack, pack-prefer, stay prevalence, realism envelope) |
 | [`PROVENANCE.md`](PROVENANCE.md) | Per-table catalog: fitted / prior / derived + fitted ICU realism notes |
 | [`tests/`](tests) | Test suite (conformance, fit, generate, eval, CLI) |
 

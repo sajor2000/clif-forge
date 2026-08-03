@@ -22,7 +22,13 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import (
+    ICU_MIN_SUPPORT_LEVEL,
+    UTC_DATETIME,
+    grid_step_hours,
+    pack_table_params,
+)
+from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
@@ -61,15 +67,27 @@ def sample_therapy_details(
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     grid_step = grid_step_hours(pack)
     icu_intervals = [i for i, lvl in enumerate(spine.support_level) if lvl >= ICU_MIN_SUPPORT_LEVEL]
-    if not icu_intervals or rng.random() >= _REHAB_PROB:
+    params = pack_table_params(pack, "therapy_details")
+    rehab_prob = float(params.get("stay_prevalence", _REHAB_PROB))
+    if not icu_intervals or rng.random() >= rehab_prob:
         return []
 
     stride = max(1, round(_SESSION_INTERVAL_HOURS / grid_step))
+    element_marginal = params.get("therapy_element_category_marginal")
     rows: list[TherapyDetailRow] = []
     for idx in range(icu_intervals[0], icu_intervals[-1] + 1, stride):
         session_start = admit_dttm + timedelta(hours=idx * grid_step)
-        for category, value in _SESSION_ELEMENTS:
-            rows.append(TherapyDetailRow(hid, session_start, category, value))
+        if isinstance(element_marginal, dict) and element_marginal:
+            cat = categorical(element_marginal, rng)
+            val = str(params.get("therapy_element_value_by_category", {}).get(cat, cat))
+            rows.append(TherapyDetailRow(hid, session_start, cat, val))
+            # Keep roughly two elements per session when fitted.
+            cat2 = categorical(element_marginal, rng)
+            val2 = str(params.get("therapy_element_value_by_category", {}).get(cat2, cat2))
+            rows.append(TherapyDetailRow(hid, session_start, cat2, val2))
+        else:
+            for category, value in _SESSION_ELEMENTS:
+                rows.append(TherapyDetailRow(hid, session_start, category, value))
     return rows
 
 

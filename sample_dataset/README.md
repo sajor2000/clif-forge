@@ -38,6 +38,14 @@ uv run clif-forge generate \
     --n-patients 5000 --seed 42 --out ./reproduced
 ```
 
+## Rare events at n=5k
+
+`ecmo_mcs` may be **empty** at this sample size: fitted stay prevalence is
+≈0.09%, so a 5k draw often yields zero ECMO stays. That is expected under
+network/fitted rates — not a schema gap. Use the ``rare-support`` preset for a
+teaching cohort that deliberately elevates ECMO/CRRT without changing the
+default network-median path.
+
 ## What's not here
 
 The full-size master (~85k encounters) is not in git. See the repo README for

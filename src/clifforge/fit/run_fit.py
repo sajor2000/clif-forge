@@ -90,6 +90,17 @@ _MODELED_COLUMNS: dict[str, frozenset[str]] = {
     "position": frozenset({"position_category"}),
     "hospital_diagnosis": frozenset({"diagnosis_code", "diagnosis_primary"}),
     "patient_procedures": frozenset({"procedure_code"}),
+    "invasive_hemodynamics": frozenset({"measure_category", "measure_value"}),
+    "transfusion": frozenset({"component_name", "volume_transfused"}),
+    "key_icu_orders": frozenset({"order_category"}),
+    "therapy_details": frozenset({"therapy_element_category"}),
+    "provider": frozenset({"provider_role_category"}),
+    "microbiology_nonculture": frozenset(
+        {"fluid_category", "organism_category", "result_category"}
+    ),
+    "intake_output": frozenset({"fluid_name", "amount", "in_out_flag"}),
+    "clinical_trial": frozenset({"trial_id"}),
+    "place_based_index": frozenset({"index_name", "index_value"}),
 }
 
 # Vitals fit with per-state AR1 (static anthropometrics excluded).
@@ -303,6 +314,33 @@ def _record_table(
     }
     modeled = _MODELED_COLUMNS.get(name, frozenset())
     field_audit[name] = _field_sources(name, source_columns, modeled)
+
+
+def _record_with_stay_prevalence(
+    name: str,
+    df: pl.DataFrame,
+    params: dict[str, object],
+    records: list[SuppressionRecord],
+    table_blocks: dict[str, dict[str, object]],
+    field_audit: dict[str, list[dict[str, str]]],
+    all_records: list[SuppressionRecord],
+    source_columns: set[str],
+    *,
+    n_hospitalizations: int,
+) -> None:
+    """Fit stay prevalence onto ``params`` then record the table block."""
+    prev, prec = estimators.fit_stay_prevalence(df, n_hospitalizations)
+    params.update(prev)
+    _record_table(
+        name,
+        df,
+        params,
+        [*records, *prec],
+        table_blocks,
+        field_audit,
+        all_records,
+        source_columns,
+    )
 
 
 def _fit_source_prior_tables(
@@ -683,6 +721,250 @@ def _fit_source_prior_tables(
             field_audit,
             all_records,
             _source_columns(tables["patient_procedures"]),
+        )
+
+    # --- previously dashboard-prior tables (hybrid: fit when source present) ---
+    if "invasive_hemodynamics" in train_tables:
+        hemo = train_tables["invasive_hemodynamics"].collect()
+        params, rec = estimators.fit_categorical_marginals(hemo, ("measure_category",))
+        cont, crec = estimators.fit_continuous_marginals(hemo, ("measure_value",))
+        params.update(cont)
+        rec = [*rec, *crec]
+        # Per-measure value edges when volume allows.
+        if "measure_category" in hemo.columns and "measure_value" in hemo.columns:
+            for cat in hemo["measure_category"].drop_nulls().unique().to_list():
+                sub = hemo.filter(pl.col("measure_category") == cat)
+                edges_params, _ = estimators.fit_continuous_marginals(sub, ("measure_value",))
+                edges = edges_params.get("measure_value_quantile_bin_edges")
+                if isinstance(edges, list) and len(edges) >= 2:
+                    params[f"{cat}_quantile_bin_edges"] = list(edges)
+        _record_with_stay_prevalence(
+            "invasive_hemodynamics",
+            hemo,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["invasive_hemodynamics"]),
+            n_hospitalizations=n_hospitalizations,
+        )
+
+    if "transfusion" in train_tables:
+        tx = train_tables["transfusion"].collect()
+        params, rec = estimators.fit_top_k_category(tx, "component_name", k=20)
+        cont, crec = estimators.fit_continuous_marginals(tx, ("volume_transfused",))
+        params.update(cont)
+        rec = [*rec, *crec]
+        prev, prec = estimators.fit_stay_prevalence(tx, n_hospitalizations)
+        params.update(prev)
+        stay_prev = params.get("stay_prevalence")
+        if isinstance(stay_prev, (int, float)) and float(stay_prev) > 0:
+            n_pos = tx["hospitalization_id"].n_unique()
+            params["events_per_positive_stay"] = round(tx.height / max(1, n_pos), 4)
+        rec = [*rec, *prec]
+        _record_table(
+            "transfusion",
+            tx,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["transfusion"]),
+        )
+
+    if "key_icu_orders" in train_tables:
+        orders = train_tables["key_icu_orders"].collect()
+        params, rec = estimators.fit_categorical_marginals(orders, ("order_category",))
+        _record_with_stay_prevalence(
+            "key_icu_orders",
+            orders,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["key_icu_orders"]),
+            n_hospitalizations=n_hospitalizations,
+        )
+
+    if "therapy_details" in train_tables:
+        td = train_tables["therapy_details"].collect()
+        params, rec = estimators.fit_categorical_marginals(td, ("therapy_element_category",))
+        if "therapy_element_value" in td.columns and "therapy_element_category" in td.columns:
+            value_by_cat: dict[str, str] = {}
+            for cat in td["therapy_element_category"].drop_nulls().unique().to_list():
+                mode = (
+                    td.filter(pl.col("therapy_element_category") == cat)["therapy_element_value"]
+                    .drop_nulls()
+                    .mode()
+                )
+                if mode.len():
+                    value_by_cat[str(cat)] = str(mode[0])
+            if value_by_cat:
+                params["therapy_element_value_by_category"] = value_by_cat
+        _record_with_stay_prevalence(
+            "therapy_details",
+            td,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["therapy_details"]),
+            n_hospitalizations=n_hospitalizations,
+        )
+
+    if "provider" in train_tables:
+        prov = train_tables["provider"].collect()
+        params, rec = estimators.fit_categorical_marginals(prov, ("provider_role_category",))
+        roles = (
+            prov.group_by("hospitalization_id")
+            .agg(pl.len().alias("n"))
+            .select(pl.col("n").mean())
+            .item()
+        )
+        if roles is not None:
+            params["roles_per_stay"] = round(float(roles), 3)
+        _record_with_stay_prevalence(
+            "provider",
+            prov,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["provider"]),
+            n_hospitalizations=n_hospitalizations,
+        )
+
+    if "microbiology_nonculture" in train_tables:
+        mnc = train_tables["microbiology_nonculture"].collect()
+        params, rec = estimators.fit_categorical_marginals(
+            mnc, ("fluid_category", "organism_category", "result_category")
+        )
+        prev, prec = estimators.fit_stay_prevalence(mnc, n_hospitalizations)
+        params.update(prev)
+        stay_prev = params.get("stay_prevalence")
+        n_pos = mnc["hospitalization_id"].n_unique()
+        if n_pos >= 1:
+            # Intensity among positive stays — not interchangeable with stay prevalence.
+            params["panels_per_stay"] = round(mnc.height / n_pos, 4)
+        elif isinstance(stay_prev, (int, float)):
+            params["panels_per_stay"] = float(stay_prev)
+        rec = [*rec, *prec]
+        _record_table(
+            "microbiology_nonculture",
+            mnc,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["microbiology_nonculture"]),
+        )
+
+    if "intake_output" in train_tables:
+        io = train_tables["intake_output"].collect()
+        # Fit intake fluid names only — urine is the hardcoded output fluid.
+        if "in_out_flag" in io.columns:
+            intake_only = io.filter(pl.col("in_out_flag") == 1)
+            params, rec = estimators.fit_top_k_category(
+                intake_only if intake_only.height else io, "fluid_name", k=30
+            )
+        else:
+            params, rec = estimators.fit_top_k_category(io, "fluid_name", k=30)
+        cont, crec = estimators.fit_continuous_marginals(io, ("amount",))
+        params.update(cont)
+        rec = [*rec, *crec]
+        by_flag: dict[str, list[float]] = {}
+        if "in_out_flag" in io.columns:
+            for flag in io["in_out_flag"].drop_nulls().unique().to_list():
+                sub = io.filter(pl.col("in_out_flag") == flag)
+                edges_params, _ = estimators.fit_continuous_marginals(sub, ("amount",))
+                edges = edges_params.get("amount_quantile_bin_edges")
+                if isinstance(edges, list) and len(edges) >= 2:
+                    by_flag[str(flag)] = list(edges)
+        if by_flag:
+            params["amount_quantile_bin_edges_by_in_out_flag"] = by_flag
+        params["chart_interval_hours"] = 1.0
+        _record_table(
+            "intake_output",
+            io,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["intake_output"]),
+        )
+
+    if "clinical_trial" in train_tables:
+        ct = train_tables["clinical_trial"].collect()
+        # Rates only — never persist real NCT / trial name strings (PHI / attribution).
+        # Fit prevalence among eligible (ventilated / high-acuity) stays when hosp
+        # peak is available; otherwise unconditional stay prevalence.
+        params, rec = estimators.fit_stay_prevalence(ct, n_hospitalizations)
+        # Approximate eligibility via IMV when hosp peak is not on the trial table.
+        if (
+            "support_level" not in ct.columns
+            and "respiratory_support" in train_tables
+        ):
+            imv_ids = (
+                train_tables["respiratory_support"]
+                .filter(pl.col("device_category") == "IMV")
+                .select("hospitalization_id")
+                .unique()
+                .collect()
+            )
+            n_elig = imv_ids.height
+            if n_elig >= 20:
+                n_enrolled = (
+                    ct.select("hospitalization_id")
+                    .unique()
+                    .join(imv_ids, on="hospitalization_id", how="inner")
+                    .height
+                )
+                params["eligible_conditional_prevalence"] = round(n_enrolled / n_elig, 6)
+        if "withdrawal_dttm" in ct.columns:
+            n = ct.height
+            withdrawn = ct.filter(pl.col("withdrawal_dttm").is_not_null()).height
+            if n >= 20:
+                params["withdrawal_prob"] = round(withdrawn / n, 4)
+        _record_table(
+            "clinical_trial",
+            ct,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["clinical_trial"]),
+        )
+
+    if "place_based_index" in train_tables:
+        pbi = train_tables["place_based_index"].collect()
+        params, rec = estimators.fit_categorical_marginals(pbi, ("index_name",))
+        by_name: dict[str, list[float]] = {}
+        if "index_name" in pbi.columns and "index_value" in pbi.columns:
+            for name in pbi["index_name"].drop_nulls().unique().to_list():
+                sub = pbi.filter(pl.col("index_name") == name)
+                edges_params, _ = estimators.fit_continuous_marginals(sub, ("index_value",))
+                edges = edges_params.get("index_value_quantile_bin_edges")
+                if isinstance(edges, list) and len(edges) >= 2:
+                    by_name[str(name)] = list(edges)
+        if by_name:
+            params["index_value_quantile_bin_edges_by_name"] = by_name
+        _record_table(
+            "place_based_index",
+            pbi,
+            params,
+            rec,
+            table_blocks,
+            field_audit,
+            all_records,
+            _source_columns(tables["place_based_index"]),
         )
 
 
