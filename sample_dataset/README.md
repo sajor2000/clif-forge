@@ -5,11 +5,15 @@ sized so every file stays under GitHub's **50 MB soft limit** (vitals ≈ 41 MB)
 lets you inspect realistic, multi-table output and test code without generating
 anything or holding any credential.
 
-- **5,000 ICU encounters**, all 28 canonical CLIF 2.1 tables plus `_truth.parquet`.
+- **5,000 ICU encounters**, all 28 canonical CLIF 2.1 tables plus `_truth.parquet`
+  (latent spine).
 - Built from the **`mimic_all28`** parameter pack (fit on local MIMIC-IV Ext CLIF)
   through the validated **`recalibrate_mimic_icu`** path: spine tempering, LOS
-  sojourns, gated NIV, terminal deterioration, and ADT front-door arrivals
-  (`arrival_location_marginal` + `direct_icu_frac`).
+  sojourns, gated NIV, terminal deterioration, RF phenotypes, and ADT front-door
+  arrivals (`arrival_location_marginal` + `direct_icu_frac`).
+
+**What each table is and how it was produced:** see repo-root
+[`PROVENANCE.md`](../PROVENANCE.md).
 
 ## Guarantees
 
@@ -21,8 +25,8 @@ anything or holding any credential.
   with the administrations given under it.
 - **Reproducible byte-for-byte** — regenerate from the committed pack, spec, and
   seed (see below).
-- **MIMIC-empirical rates** — IMV / mortality / NIV / ADT arrivals track the
-  local MIMIC ICU cohort within the validated recalibrate envelope.
+- **MIMIC-empirical rates** — IMV / mortality / NIV / ADT arrivals / diagnosis
+  case-mix track the local MIMIC ICU cohort within the validated envelope.
 
 ## Reproduce it
 

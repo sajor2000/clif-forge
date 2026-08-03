@@ -10,6 +10,9 @@ sees, with realistic patient flow.
   **`recalibrate_to_full_hospital`** path (coupled `admission_route_marginal` →
   ADT front door + ward-dominant peak acuity).
 
+**What each table is and how it was produced:** see repo-root
+[`PROVENANCE.md`](../PROVENANCE.md).
+
 ## Reproduce it
 
 ```bash

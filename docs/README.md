@@ -6,16 +6,18 @@ here go deeper.
 
 | File | What it is | For whom |
 |---|---|---|
-| [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) | The deterministic, seeded pipeline (real CLIF → base pack → population pack → dataset), and how any artifact regenerates byte-for-byte | Anyone reproducing or auditing a dataset |
-| [`CONSORTIUM_ANNOUNCEMENT.md`](CONSORTIUM_ANNOUNCEMENT.md) | Copy-paste Slack + email blurbs announcing CLIFForge, with the dataset link embedded | The project owner, when sharing it |
-| [`plans/`](plans) | The original design plan and two follow-up plans (realism gaps; master + derivatives) | Contributors and maintainers |
+| [`../PROVENANCE.md`](../PROVENANCE.md) | **Table catalog** — all 28 CLIF 2.1 tables + spine; fitted / prior / derived; MIMIC realism changelog | Anyone auditing how a table was produced |
+| [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) | The deterministic, seeded pipeline (real CLIF → pack → dataset), and how any artifact regenerates | Anyone reproducing or auditing a dataset |
+| [`CONSORTIUM_ANNOUNCEMENT.md`](CONSORTIUM_ANNOUNCEMENT.md) | Copy-paste Slack + email blurbs announcing CLIFForge | The project owner, when sharing it |
+| [`plans/`](plans) | Historical design plans (founding generator; realism gaps; master + derivatives) | Contributors and maintainers |
 
 ## About `plans/`
 
 These are **historical design records**, not user documentation — they capture the
 decisions and requirements behind the build (methodology, conformance rules,
 realism targets). They are kept for provenance and for contributors; a researcher
-using the datasets never needs them.
+using the datasets never needs them. Prefer [`PROVENANCE.md`](../PROVENANCE.md)
+for the current table map.
 
 - `2026-07-23-001-…-generator-plan.md` — the founding design (empirical-fidelity fit-then-sample, conformance harness, table tiers).
 - `2026-07-25-001-…-close-realism-gaps-plan.md` — tightening vitals, labs, terminal dynamics, and peak-acuity shape.
