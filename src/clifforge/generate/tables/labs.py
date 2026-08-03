@@ -91,6 +91,14 @@ _SHOCK_MARKERS = frozenset({"lactate"})
 _SHOCK_LOG_SHIFT = 0.4
 _SHOCK_VALUE_FACTOR = float(np.exp(_SHOCK_LOG_SHIFT))
 
+#: Soft leukocytosis when respiratory failure / IMV-tier acuity is active
+#: (spine-available infection proxy — no invented culture positivity).
+#: Soft infection proxy: vaso-tier + respiratory failure flag (not all IMV).
+_INFLAMMATION_MARKERS = frozenset({"wbc"})
+_INFLAMMATION_LOG_SHIFT = 0.35
+_INFLAMMATION_VALUE_FACTOR = float(np.exp(_INFLAMMATION_LOG_SHIFT))
+_INFLAMMATION_MIN_SUPPORT = 4
+
 #: Collect delay after order (minutes) and result delay after collect (hours) —
 #: documented chem-panel priors, shorter than culture turnaround.
 _COLLECT_DELAY_MINUTES = (5.0, 60.0)
@@ -118,6 +126,7 @@ def _apply_clinical_lab_bumps(
     renal: bool,
     renal_frac: float,
     shock: bool,
+    inflammation: bool,
     log_space: bool,
 ) -> float:
     """Apply R12 organ-failure bumps; renal ramps with consecutive flag hours."""
@@ -135,6 +144,11 @@ def _apply_clinical_lab_bumps(
     elif lab in _SHOCK_MARKERS and not shock:
         # Soft cap: non-shock hyperlactatemia is uncommon (vaso|lactate ≈ reference).
         value = min(value, 3.0) if not log_space else min(value, float(np.log1p(3.0)))
+    if inflammation and lab in _INFLAMMATION_MARKERS:
+        if log_space:
+            value += _INFLAMMATION_LOG_SHIFT
+        else:
+            value *= _INFLAMMATION_VALUE_FACTOR
     return value
 
 
@@ -273,6 +287,11 @@ def sample_labs(
         result_dttm = collect_dttm + timedelta(hours=float(rng.uniform(*_RESULT_DELAY_HOURS)))
         renal = spine.renal_flag[interval_idx]
         shock = spine.cv_flag[interval_idx]
+        inflammation = (
+            spine.support_level[interval_idx] >= _INFLAMMATION_MIN_SUPPORT
+            and interval_idx < len(spine.resp_flag)
+            and spine.resp_flag[interval_idx]
+        )
         renal_frac = (
             _renal_run_hours(spine.renal_flag, interval_idx, grid_step) / _RENAL_RAMP_HOURS
             if renal
@@ -292,7 +311,13 @@ def sample_labs(
                 u = float(ndtr(float(z[i])))
                 value = float(np.interp(u, LAB_QUANTILE_PROBS, grid))
                 value = _apply_clinical_lab_bumps(
-                    lab, value, renal=renal, renal_frac=renal_frac, shock=shock, log_space=False
+                    lab,
+                    value,
+                    renal=renal,
+                    renal_frac=renal_frac,
+                    shock=shock,
+                    inflammation=inflammation,
+                    log_space=False,
                 )
             else:
                 marg = marginals.get(lab)
@@ -305,6 +330,7 @@ def sample_labs(
                     renal=renal,
                     renal_frac=renal_frac,
                     shock=shock,
+                    inflammation=inflammation,
                     log_space=True,
                 )
                 value = float(np.expm1(log_val))

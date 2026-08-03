@@ -1,0 +1,39 @@
+{
+  "provenance": "CLIF network-median ICU cohort envelope for CI realism locks. Bands match tests/eval/test_realism_targets.py (U6/R7) and recalibrate_to_network_median defaults. Shareable — no DUA row data.",
+  "source": "consortium network-median / recalibrate defaults",
+  "retrieved": "2026-08-03",
+  "n_patients_ci": 900,
+  "seed": 99,
+  "lock_note": "measured_* anchors are seed-99 base_pack means. Editing lo/hi alone without re-measuring should fail the measured_* slack asserts.",
+  "mortality": {"lo": 0.07, "hi": 0.13, "note": "network-median ~0.095"},
+  "imv_stay": {"lo": 0.30, "hi": 0.50},
+  "vaso_stay": {"lo": 0.24, "hi": 0.40},
+  "crrt_stay": {"lo": 0.02, "hi": 0.07},
+  "hospital_los_hours_median": {"lo": 120, "hi": 210},
+  "icu_los_hours_median": {"lo": 35, "hi": 65},
+  "heart_rate_ar1_lag1_mean": {"lo": 0.4},
+  "creatinine_presence": {"lo": 0.9},
+  "abg_jaccard_min": {
+    "lo": 0.70,
+    "note": "mean pairwise Jaccard of arterial pH/pCO2/pO2 presence within stays that have any ABG member; base_pack mean ~0.93"
+  },
+  "ecmo_mcs_empty_ok_at_n_le": 5000,
+  "measured": {
+    "mortality": 0.0967,
+    "imv_stay": 0.3756,
+    "vaso_stay": 0.3967,
+    "crrt_stay": 0.0256,
+    "hospital_los_hours_median": 166.5,
+    "icu_los_hours_median": 57.0,
+    "heart_rate_ar1_lag1_mean": 0.7468,
+    "creatinine_presence": 0.9867,
+    "abg_jaccard_mean": 0.9279,
+    "ecmo_stay": 0.0
+  },
+  "measured_slack": {
+    "rate": 0.04,
+    "los_hours": 25.0,
+    "ar1": 0.15,
+    "jaccard": 0.12
+  }
+}

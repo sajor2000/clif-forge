@@ -76,8 +76,8 @@ def _source_for(table: str, pack: ParamPack | None) -> dict[str, object]:
             if table == "medication_orders"
             else "microbiology_susceptibility ← microbiology_culture"
         )
-    elif fitted and table in SOURCE_CLIF_TABLES:
-        kind = "source_fit"
+    elif fitted:
+        kind = "source_fit" if table in SOURCE_CLIF_TABLES else "pack_fit"
         detail = f"pack.tables[{table!r}].params"
     elif table in SOURCE_CLIF_TABLES:
         kind = "source_pending"

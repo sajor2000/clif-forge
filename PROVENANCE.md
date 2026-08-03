@@ -61,22 +61,27 @@ acuity or pathways themselves.
 | `patient_assessments` | fitted | Assessment-category marginal; RASS/GCS still spine-coupled |
 | `position` | fitted | Prone rates (overall + among IMV) |
 | `microbiology_culture` | fitted | Cultures/ICU-day + fluid/method; organism prior when source null |
-| `microbiology_nonculture` | dashboard-prior | Per-stay molecular-panel rate |
+| `microbiology_nonculture` | dashboard-prior† | Per-stay molecular-panel rate; pack-prefer when fitted |
 | `microbiology_susceptibility` | derived | Panel per isolate from `microbiology_culture` (`organism_id`) |
 | `crrt_therapy` | fitted | Stay prevalence + mode/rate quantiles; renal-flag windows + creat gate |
 | `code_status` | fitted | Outcome-conditional DNR/AND rates |
 | `ecmo_mcs` | fitted | Stay prevalence + device/mcs/flow quantiles |
-| `invasive_hemodynamics` | dashboard-prior | PA-catheter stay rate + cardiogenic vs distributive ranges |
-| `transfusion` | dashboard-prior | Acuity-scaled rate anchored to dashboard stay rate |
-| `key_icu_orders` | dashboard-prior | Rehab order stay fraction |
-| `therapy_details` | dashboard-prior | PT/OT session elements (same rehab gate) |
-| `provider` | dashboard-prior | Attending + nurse spanning each stay |
+| `invasive_hemodynamics` | dashboard-prior† | PA-catheter stay rate + cardiogenic vs distributive ranges |
+| `transfusion` | dashboard-prior† | Acuity-scaled rate anchored to dashboard stay rate |
+| `key_icu_orders` | dashboard-prior† | Rehab order stay fraction |
+| `therapy_details` | dashboard-prior† | PT/OT session elements (same rehab gate) |
+| `provider` | dashboard-prior† | Attending + nurse spanning each stay |
 | `hospital_diagnosis` | prior + fitted pad | reference stay-prevalence disease/cancer priors (acuity-scaled); soft acute flag codes; top-K marginal **pads density only** (~18 codes/stay) |
 | `patient_diagnosis` | prior | Same chronic/cancer priors as hospital_diagnosis; encounter dx from spine |
 | `patient_procedures` | fitted | Stay prevalence + top-K `procedure_code` |
-| `intake_output` | dashboard-prior | Hourly balance; oliguria / resuscitation on spine flags |
-| `place_based_index` | dashboard-prior | One deprivation draw (ADI/SVI scales) |
-| `clinical_trial` | dashboard-prior | Enrolment rate for ventilated stays |
+| `intake_output` | dashboard-prior† | Hourly balance; oliguria / resuscitation on spine flags |
+| `place_based_index` | dashboard-prior† | One deprivation draw (ADI/SVI scales) |
+| `clinical_trial` | dashboard-prior† | Enrolment rate for ventilated stays |
+
+† Hybrid: generators prefer `pack.tables[<name>].params` when a fitted block is
+present; otherwise dashboard / literature priors. The local source extract
+(`~/Data/clif-source`) still omits these nine tables, so `icu_all28` remains
+dashboard-prior for them until those parquets are staged and `run_fit` is re-run.
 
 Output filenames for deliverable parquet follow CLIF 2.1 maturity badges only:
 `clif_<table>_2.1_{beta|concept}.parquet`. The three DDL tables without a website
@@ -91,12 +96,14 @@ Work on branch `cursor/rename-truth-spine` brought generation into the reference
 statistical region and tightened longitudinal coherence:
 
 1. **Fit path** — `icu_all28` pack + reference estimators for clinical tables present
-   in the local extract; dashboard priors only for source-absent tables.
+   in the local extract; dashboard priors only for source-absent tables (hybrid
+   pack-prefer path ready when those tables appear under `--real-dir`).
 2. **Recalibrate** — `recalibrate_fitted_icu` (not anonymous network-median overwrite
    of fitted reference blocks): IMV/mortality/NIV/ADT targets, terminal mix, CRRT gate,
-   `resp_phenotype_marginal`, sedation knobs.
+   `resp_phenotype_marginal`, sedation knobs; optional `ecmo_stay` for teaching presets.
 3. **Trajectories** — sicker↔sicker coupling: vitals/labs track spine flags; soft
-   L4→cv / L5→renal; terminal archetypes with reference-like invent rates.
+   L4→cv / L5→renal; terminal archetypes; **HR↔BP correlated AR(1) innovations**;
+   WBC leukocytosis bump on IMV-tier / resp_flag.
 4. **Respiratory pathways** — type1 NC→HFNC→IMV vs type2 NIPPV→IMV; NIV stay-gated
    so NIPPV/HFNC stay rates match reference (± few pp).
 5. **Sedation** — continuous sedatives paired with IMV (`sedation_per_imv`).
@@ -104,19 +111,25 @@ statistical region and tightened longitudinal coherence:
    stay prevalences within ±5 pp; codes/stay ~18; sicker stays carry more chronics.
 7. **Validation** — `scripts/validate_against_real.py` probes for trajectories,
    coherence (vaso\|IMV, sedation\|IMV, decedent physiology, CRRT\|creat), plus
-   `scripts/audit_realism_sources.py`.
+   `scripts/audit_realism_sources.py`; **CI always-on** envelope lock on `base_pack`
+   (`tests/eval/test_base_pack_envelope.py`).
 8. **Samples** — `sample_dataset/` and `sample_full_hospital/` regenerated from
-   `icu_all28` (n=5000, seed 42) via the validated recalibrate paths.
+   `icu_all28` (n=5000, seed 42) via the validated recalibrate paths. Empty
+   `ecmo_mcs` at n=5k is expected; use preset `rare-support` for teaching.
+9. **Rare-event teaching** — `presets/rare-support.toml` elevates ECMO/CRRT without
+   changing default network-median rates.
 
 ## Notes
 
 - fitted clinical blocks are **not** replaced by network-median priors when
   generating ICU data from `icu_all28`.
-- Dashboard priors apply only to tables absent from the local source CLIF extract.
+- Dashboard priors apply only to tables absent from the local source CLIF extract;
+  generators prefer pack params when a fitted block exists.
 - Derived tables inherit parent structure; susceptibility resistance panels remain
   literature norms.
 - Demo / hand-prior runs without a reference pack still use documented constants so
   unit tests and tiny demos stay self-contained.
+- Teaching presets (`rare-support`) are **not** network-rate calibrated.
 
 **Release gate:** any public release of a generated dataset or the parameter pack
 requires credentialed-data and Rush compliance confirmation.

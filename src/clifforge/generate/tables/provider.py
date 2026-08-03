@@ -1,12 +1,8 @@
 """Tier 6 ``provider`` generator (U20; prior-driven, R14, KTD-6).
 
-Every hospitalization has a care team, so each stay gets a small documented set
-of provider assignments (an attending plus a bedside nurse) spanning admission to
-discharge. There is no fitted block and the vendored 2.1.0 dictionary leaves
-``provider_role_category`` free text (no mCIDE list), so documented role labels
-are used (R15 — prior-driven, marked in ``PROVENANCE.md``). ``provider_id`` is
-synthesized per role. The spine supplies only the stay horizon (KTD-6);
-reproducible under a fixed ``rng`` (R22).
+Every hospitalization has a care team. Without a fitted block, each stay gets a
+documented attending + bedside nurse. With pack params, role marginal and
+roles-per-stay drive the assignment set.
 """
 
 from __future__ import annotations
@@ -18,13 +14,16 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
+from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
+from clifforge.reference.dashboard_priors import absent_table_rates as _DASH_RATES
 
 __all__ = ["ProviderRow", "provider_frame", "sample_provider"]
 
 #: Documented care-team roles assigned for the whole stay.
 _ROLES: tuple[str, ...] = ("Attending", "Nurse")
+_DEFAULT_ROLES_PER_STAY = _DASH_RATES["provider_roles_per_stay"]
 
 _DEFAULT_ADMIT = datetime(2020, 1, 1, tzinfo=UTC)
 
@@ -48,25 +47,30 @@ def sample_provider(
     hospitalization_id: str | None = None,
     admit_dttm: datetime = _DEFAULT_ADMIT,
 ) -> list[ProviderRow]:
-    """Emit the stay's provider assignments (R22).
-
-    ``rng`` is accepted for signature uniformity; provider roles are deterministic
-    from the stay, so the result is trivially reproducible.
-    """
-    del rng
+    """Emit the stay's provider assignments (R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     los_hours = spine.n_intervals * grid_step_hours(pack)
     discharge = admit_dttm + timedelta(hours=los_hours)
+    params = pack_table_params(pack, "provider")
+    role_marginal = params.get("provider_role_category_marginal")
+    roles_per_stay = float(params.get("roles_per_stay", _DEFAULT_ROLES_PER_STAY))
+
+    if isinstance(role_marginal, dict) and role_marginal:
+        n_roles = max(1, int(round(roles_per_stay)))
+        roles = [categorical(role_marginal, rng) for _ in range(n_roles)]
+    else:
+        del rng
+        roles = list(_ROLES)
 
     return [
         ProviderRow(
             hospitalization_id=hid,
-            provider_id=f"{hid}-{role}",
+            provider_id=f"{hid}-{role}" if roles.count(role) == 1 else f"{hid}-{role}-{i}",
             start_dttm=admit_dttm,
             stop_dttm=discharge,
             provider_role_category=role,
         )
-        for role in _ROLES
+        for i, role in enumerate(roles)
     ]
 
 

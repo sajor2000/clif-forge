@@ -1,0 +1,11 @@
+# Teaching cohort with elevated rare organ-support events (ECMO / CRRT).
+# Deliberately *not* network-median rates — use for demos and ETL drills where
+# empty ecmo_mcs at n≈5k would hide the table. Default presets stay unchanged.
+name = "rare-support"
+
+[rates]
+imv = 0.50
+vaso_frac = 0.40
+crrt_prob = 0.55
+ecmo_stay = 0.08
+mortality_scale = 1.2

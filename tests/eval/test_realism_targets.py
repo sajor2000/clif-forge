@@ -1,10 +1,11 @@
-"""Realism regression guard for the network-median deliverable (U6, R7).
+"""Local DUA realism regression guard (U6, R7).
 
-Generates a small cohort from the re-fit -> Chicago -> network-median chain and
-asserts the aggregate realism targets, so a change to the recalibration defaults
-or the generator paths cannot silently regress the output. Requires the local
-DUA-derived pack (``data/param_packs/chicago_v2``); it is skipped where that pack
-is absent (CI, fresh clones) since the pack cannot be redistributed.
+Generates a cohort from the re-fit -> Chicago -> network-median chain and
+asserts aggregate realism targets. Requires the local DUA-derived pack
+(``data/param_packs/chicago_v2``); skipped in CI / fresh clones.
+
+**CI always-on lock:** see ``test_base_pack_envelope.py`` +
+``network_median_envelope.json`` (shareable ``base_pack``, no DUA data).
 """
 
 from __future__ import annotations

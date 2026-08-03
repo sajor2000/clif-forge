@@ -359,3 +359,69 @@ def test_missing_labs_block_raises() -> None:
 
 def test_module_exports() -> None:
     assert set(labs.__all__) == {"LabObservation", "labs_frame", "sample_labs"}
+
+
+def test_wbc_rises_under_inflammation() -> None:
+    """Vaso-tier + resp_flag bumps WBC vs a matched quiet ICU stay."""
+    pack = ParamPack(
+        manifest={},
+        tables={
+            "labs": {
+                "n_records": 100,
+                "fitted": True,
+                "params": {
+                    "lab_order": ["wbc"],
+                    "lab_correlation": [[1.0]],
+                    "lab_marginals": {"wbc": {"log_mean": 2.2, "log_sd": 0.2}},
+                    "lab_presence": {"wbc": 1.0},
+                },
+            },
+            "spine": {"params": {"state_model": {"grid_step_hours": 24.0}}},
+        },
+    )
+    quiet = SpineFrame(
+        hospitalization_id="Hq",
+        support_level=[2] * 20,
+        resp_flag=[False] * 20,
+        cv_flag=[False] * 20,
+        renal_flag=[False] * 20,
+        neuro_flag=[False] * 20,
+        outcome="alive",
+    )
+    inflamed = SpineFrame(
+        hospitalization_id="Hi",
+        support_level=[4] * 20,
+        resp_flag=[True] * 20,
+        cv_flag=[False] * 20,
+        renal_flag=[False] * 20,
+        neuro_flag=[False] * 20,
+        outcome="alive",
+    )
+    # IMV without vaso-tier should NOT trigger the inflammation bump alone.
+    ventilated_only = SpineFrame(
+        hospitalization_id="Hv",
+        support_level=[3] * 20,
+        resp_flag=[True] * 20,
+        cv_flag=[False] * 20,
+        renal_flag=[False] * 20,
+        neuro_flag=[False] * 20,
+        outcome="alive",
+    )
+    q = [
+        o.lab_value_numeric
+        for o in sample_labs(quiet, pack, np.random.default_rng(0))
+        if o.lab_category == "wbc"
+    ]
+    i = [
+        o.lab_value_numeric
+        for o in sample_labs(inflamed, pack, np.random.default_rng(0))
+        if o.lab_category == "wbc"
+    ]
+    v = [
+        o.lab_value_numeric
+        for o in sample_labs(ventilated_only, pack, np.random.default_rng(0))
+        if o.lab_category == "wbc"
+    ]
+    assert q and i and v
+    assert float(np.mean(i)) > float(np.mean(q)) * 1.15
+    assert abs(float(np.mean(v)) - float(np.mean(q))) / float(np.mean(q)) < 0.08

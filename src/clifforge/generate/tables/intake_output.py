@@ -28,7 +28,12 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import ICU_MIN_SUPPORT_LEVEL, UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import (
+    ICU_MIN_SUPPORT_LEVEL,
+    UTC_DATETIME,
+    grid_step_hours,
+    pack_table_params,
+)
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
 
@@ -84,7 +89,12 @@ def sample_intake_output(
     """Chart hourly intake and urine output across the ICU stay (R22)."""
     hid = hospitalization_id if hospitalization_id is not None else spine.hospitalization_id
     grid_step = grid_step_hours(pack)
-    stride = max(1, round(_CHART_INTERVAL_HOURS / grid_step))
+    params = pack_table_params(pack, "intake_output")
+    chart_hours = float(params.get("chart_interval_hours", _CHART_INTERVAL_HOURS))
+    stride = max(1, round(chart_hours / grid_step))
+    fluid_marginal = params.get("fluid_name_marginal")
+    if not isinstance(fluid_marginal, dict) or not fluid_marginal:
+        fluid_marginal = _INTAKE_FLUIDS
 
     rows: list[IntakeOutputRow] = []
     for idx in range(0, spine.n_intervals, stride):
@@ -96,12 +106,29 @@ def sample_intake_output(
         resuscitated = oliguric or spine.cv_flag[idx]
 
         intake_range = _INTAKE_ML_PER_HOUR_RESUSCITATED if resuscitated else _INTAKE_ML_PER_HOUR
+        amount_edges = params.get("amount_quantile_bin_edges_by_in_out_flag", {}).get(str(_INTAKE))
+        # Pack edges only when physiology is ordinary; resus/oliguria keep clinical ranges.
+        if (
+            not resuscitated
+            and isinstance(amount_edges, list)
+            and len(amount_edges) >= 2
+        ):
+            i = int(rng.integers(0, len(amount_edges) - 1))
+            a, b = float(amount_edges[i]), float(amount_edges[i + 1])
+            if a > b:
+                a, b = b, a
+            intake_amt = round(float(a if a == b else rng.uniform(a, b)), 1)
+        else:
+            intake_amt = round(float(rng.uniform(*intake_range)), 1)
+        intake_fluid_marginal = {
+            k: v for k, v in fluid_marginal.items() if k != _URINE
+        } or _INTAKE_FLUIDS
         rows.append(
             IntakeOutputRow(
                 hospitalization_id=hid,
                 intake_dttm=at,
-                fluid_name=categorical(_INTAKE_FLUIDS, rng),
-                amount=round(float(rng.uniform(*intake_range)), 1),
+                fluid_name=categorical(intake_fluid_marginal, rng),
+                amount=intake_amt,
                 in_out_flag=_INTAKE,
             )
         )
@@ -111,12 +138,21 @@ def sample_intake_output(
             urine_range = _URINE_ML_PER_HOUR_OLIGURIC
         else:
             urine_range = _URINE_ML_PER_HOUR
+        out_edges = params.get("amount_quantile_bin_edges_by_in_out_flag", {}).get(str(_OUTPUT))
+        if isinstance(out_edges, list) and len(out_edges) >= 2 and not (oliguric or anuric):
+            i = int(rng.integers(0, len(out_edges) - 1))
+            a, b = float(out_edges[i]), float(out_edges[i + 1])
+            if a > b:
+                a, b = b, a
+            urine_amt = round(float(a if a == b else rng.uniform(a, b)), 1)
+        else:
+            urine_amt = round(float(rng.uniform(*urine_range)), 1)
         rows.append(
             IntakeOutputRow(
                 hospitalization_id=hid,
                 intake_dttm=at,
                 fluid_name=_URINE,
-                amount=round(float(rng.uniform(*urine_range)), 1),
+                amount=urine_amt,
                 in_out_flag=_OUTPUT,
             )
         )

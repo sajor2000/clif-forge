@@ -25,6 +25,7 @@ __all__ = [
     "UTC_DATETIME",
     "enforce_numeric_ids",
     "grid_step_hours",
+    "pack_table_params",
 ]
 
 #: THE ID-TYPE RULE (hardcoded, single source of truth — defined in
@@ -85,3 +86,16 @@ def grid_step_hours(pack: ParamPack) -> float:
     if block is None or "params" not in block:
         return 1.0
     return float(block["params"].get("state_model", {}).get("grid_step_hours", 1.0))
+
+
+def pack_table_params(pack: ParamPack, table: str) -> dict:
+    """Return ``pack.tables[table]['params']`` or ``{}`` when absent / unfitted.
+
+    Rejects non-dict table blocks and non-dict ``params`` so a corrupt pack
+    falls back to dashboard priors instead of raising mid-generation.
+    """
+    block = pack.tables.get(table, {})
+    if not isinstance(block, dict):
+        return {}
+    params = block.get("params", {})
+    return params if isinstance(params, dict) else {}

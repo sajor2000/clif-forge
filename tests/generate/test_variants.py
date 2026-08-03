@@ -131,7 +131,17 @@ def test_race_override_applies_without_real_data() -> None:
 
 def test_shipped_presets_are_listed() -> None:
     names = list_presets()
-    assert {"high-acuity", "older-cohort", "sepsis-heavy"} <= set(names)
+    assert {"high-acuity", "older-cohort", "sepsis-heavy", "rare-support"} <= set(names)
+
+
+def test_rare_support_preset_raises_ecmo_stay() -> None:
+    spec = load_preset("rare-support")
+    assert spec.ecmo_stay is not None and spec.ecmo_stay >= 0.05
+    assert spec.crrt_prob > VariantSpec().crrt_prob
+    pack = spec_to_pack(spec, demo_pack())
+    ecmo = pack.tables["ecmo_mcs"]["params"]
+    assert float(ecmo["stay_prevalence"]) == pytest.approx(spec.ecmo_stay)
+    assert int(ecmo["min_support_level"]) == 4
 
 
 def test_every_shipped_preset_validates() -> None:

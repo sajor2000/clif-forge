@@ -35,7 +35,7 @@ import numpy as np
 import polars as pl
 
 from clifforge.fit.param_pack import ParamPack
-from clifforge.generate._common import UTC_DATETIME, grid_step_hours
+from clifforge.generate._common import UTC_DATETIME, grid_step_hours, pack_table_params
 from clifforge.generate.loinc import micro_loinc_code
 from clifforge.generate.sampling import categorical
 from clifforge.generate.spine import SpineFrame
@@ -120,16 +120,45 @@ def sample_microbiology_nonculture(
         return []
 
     organism_group = loader.crosswalk(_TABLE, "organism_category", "organism_group")
+    params = pack_table_params(pack, "microbiology_nonculture")
+    # Prefer intensity among positive stays; fall back to dashboard Poisson λ.
+    if "panels_per_stay" in params:
+        lam = float(params["panels_per_stay"])
+        stay_prev = params.get("stay_prevalence")
+        if isinstance(stay_prev, (int, float)) and rng.random() >= float(stay_prev):
+            return []
+    else:
+        lam = float(params.get("stay_prevalence", _PANELS_PER_STAY))
+    organism_marginal = params.get("organism_category_marginal")
+    if not isinstance(organism_marginal, dict) or not organism_marginal:
+        organism_marginal = _TARGET_MARGINAL
+    fluid_marginal = params.get("fluid_category_marginal")
+    result_marginal = params.get("result_category_marginal")
+    if not isinstance(result_marginal, dict) or not result_marginal:
+        result_marginal = _RESULT_MARGINAL
 
     events: list[NonCultureEvent] = []
-    for _ in range(int(rng.poisson(_PANELS_PER_STAY))):
-        target = categorical(_TARGET_MARGINAL, rng)
-        fluid, order_name = _TARGET_SPECIMEN[target]
+    n_panels = int(rng.poisson(lam))
+    if "panels_per_stay" in params:
+        n_panels = max(1, n_panels)
+    for _ in range(n_panels):
+        target = categorical(organism_marginal, rng)
+        if target in _TARGET_SPECIMEN:
+            fluid, order_name = _TARGET_SPECIMEN[target]
+        elif isinstance(fluid_marginal, dict) and fluid_marginal:
+            # Unknown organism from a fitted marginal: keep fluid from pack, skip
+            # inventing an organism_group roll-up — fall back to a known target.
+            target = categorical(_TARGET_MARGINAL, rng)
+            fluid, order_name = _TARGET_SPECIMEN[target]
+        else:
+            target = categorical(_TARGET_MARGINAL, rng)
+            fluid, order_name = _TARGET_SPECIMEN[target]
         order = admit_dttm + timedelta(
             hours=float(rng.random()) * min(los_hours, _ORDER_WINDOW_HOURS)
         )
         collect = order + timedelta(minutes=float(rng.uniform(*_COLLECT_DELAY_MINUTES)))
         result = collect + timedelta(hours=float(rng.uniform(*_TURNAROUND_HOURS)))
+        group = organism_group[target]
         events.append(
             NonCultureEvent(
                 patient_id=pid,
@@ -140,8 +169,8 @@ def sample_microbiology_nonculture(
                 fluid_category=fluid,
                 micro_order_name=order_name,
                 organism_category=target,
-                organism_group=organism_group[target],
-                result_category=categorical(_RESULT_MARGINAL, rng),
+                organism_group=group,
+                result_category=categorical(result_marginal, rng),
             )
         )
     events.sort(key=lambda e: e.order_dttm)

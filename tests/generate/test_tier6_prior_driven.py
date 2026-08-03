@@ -24,6 +24,7 @@ from clifforge.generate.tables.invasive_hemodynamics import (
     sample_invasive_hemodynamics,
 )
 from clifforge.generate.tables.key_icu_orders import key_icu_orders_frame, sample_key_icu_orders
+from clifforge.generate.tables.microbiology_nonculture import sample_microbiology_nonculture
 from clifforge.generate.tables.provider import provider_frame, sample_provider
 from clifforge.generate.tables.therapy_details import (
     sample_therapy_details,
@@ -246,6 +247,86 @@ def test_provider_covers_every_stay() -> None:
     for r in rows:
         assert r.start_dttm < r.stop_dttm
     assert gate.validate(provider_frame(rows), "provider", run_secondary=False).pandera_passed
+
+
+def test_transfusion_pack_prefer_stay_prevalence() -> None:
+    """Fitted transfusion stay_prevalence gates emission when present."""
+    pack = ParamPack(
+        manifest={},
+        tables={
+            "spine": {"params": {"state_model": {"grid_step_hours": 1.0}}},
+            "transfusion": {
+                "fitted": True,
+                "params": {
+                    "stay_prevalence": 1.0,
+                    "events_per_positive_stay": 2.0,
+                    "component_name_marginal": {"RBC": 1.0},
+                },
+            },
+        },
+    )
+    rows = sample_transfusion(_spine([4] * 24, hid="Ht"), pack, np.random.default_rng(0))
+    assert rows
+    assert all(r.component_name == "RBC" for r in rows)
+
+
+def test_transfusion_pack_prefer_zero_prevalence_emits_nothing() -> None:
+    pack = ParamPack(
+        manifest={},
+        tables={
+            "spine": {"params": {"state_model": {"grid_step_hours": 1.0}}},
+            "transfusion": {
+                "fitted": True,
+                "params": {"stay_prevalence": 0.0, "events_per_positive_stay": 5.0},
+            },
+        },
+    )
+    assert not sample_transfusion(_spine([4] * 24, hid="Hz"), pack, np.random.default_rng(1))
+
+
+def test_pack_table_params_rejects_corrupt_block() -> None:
+    from clifforge.generate._common import pack_table_params
+
+    pack = ParamPack(manifest={}, tables={"transfusion": "not-a-dict"})  # type: ignore[dict-item]
+    assert pack_table_params(pack, "transfusion") == {}
+    pack2 = ParamPack(manifest={}, tables={"transfusion": {"params": [1, 2, 3]}})
+    assert pack_table_params(pack2, "transfusion") == {}
+
+
+def test_key_icu_orders_keeps_pt_ot_ladder_when_fitted() -> None:
+    pack = ParamPack(
+        manifest={},
+        tables={
+            "spine": {"params": {"state_model": {"grid_step_hours": 1.0}}},
+            "key_icu_orders": {
+                "fitted": True,
+                "params": {
+                    "stay_prevalence": 1.0,
+                    "order_category_marginal": {"PT_treat": 1.0},
+                },
+            },
+        },
+    )
+    rows = sample_key_icu_orders(_spine([3] * 48, hid="Ho"), pack, np.random.default_rng(0))
+    cats = [r.order_category for r in rows]
+    assert "PT_evaluation" in cats and "OT_evaluation" in cats
+    assert "PT_treat" in cats and "OT_treat" in cats
+
+
+def test_microbiology_pack_prefer_zero_prevalence_emits_nothing() -> None:
+    pack = ParamPack(
+        manifest={},
+        tables={
+            "spine": {"params": {"state_model": {"grid_step_hours": 1.0}}},
+            "microbiology_nonculture": {
+                "fitted": True,
+                "params": {"stay_prevalence": 0.0, "panels_per_stay": 3.0},
+            },
+        },
+    )
+    assert not sample_microbiology_nonculture(
+        _spine([3] * 24, hid="Hm"), pack, np.random.default_rng(2)
+    )
 
 
 # --- provenance -------------------------------------------------------------- #

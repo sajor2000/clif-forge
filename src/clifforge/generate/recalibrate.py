@@ -357,6 +357,7 @@ def recalibrate_to_network_median(
     lab_ward_panel_interval_hours: float = 18.0,
     terminal_deterioration_hours: float = 24.0,
     crrt_prob: float = 0.29,
+    ecmo_stay: float | None = None,
     repair_vitals: bool = True,
 ) -> ParamPack:
     """Return a deep-copied pack recalibrated to the CLIF network-median ICU cohort.
@@ -447,6 +448,17 @@ def recalibrate_to_network_median(
     tables["position"] = {
         "params": {"prone_prob_severe": prone_prob_severe, "prone_prob_otherwise": 0.001}
     }
+    # Network-median ECMO is rare (~0.09% of stays). Without an explicit
+    # stay_prevalence gate the generator emits on every L5 window and floods.
+    ecmo_rate = 0.0009 if ecmo_stay is None else float(ecmo_stay)
+    ecmo = dict(tables.get("ecmo_mcs", {}))
+    ecmo_params = dict(ecmo.get("params", {}))
+    ecmo_params["stay_prevalence"] = ecmo_rate
+    if ecmo_stay is not None:
+        # Teaching override: allow vaso-tier (L4) so elevated rates show at n≈1k.
+        ecmo_params["min_support_level"] = 4
+    ecmo["params"] = ecmo_params
+    tables["ecmo_mcs"] = ecmo
 
     return ParamPack(manifest=dict(pack.manifest), tables=tables)
 
