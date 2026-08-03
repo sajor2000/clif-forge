@@ -9,8 +9,9 @@ Pin re-diff: CLIF commit `966bc5fb…` equals tag `v2.1.0`; website maturity
 | concept | 16 | yes |
 | untiered (null badge) | 3 | **no** — generated in memory only |
 
-Deliverable parquet is **only** `clif_<table>_2.1_{beta|concept}.parquet` (25 tables)
-plus optional `_truth.parquet`.
+Deliverable parquet is **only** `clif_<table>_2.1_{beta|concept}.parquet` (25 tables).
+Share packages must **not** include `_truth.parquet` (generator-internal spine) or
+untiered DDL tables. Audit with `scripts/audit_share_package.py`.
 
 ## Gap closure (KNOWN_GAPS empty)
 

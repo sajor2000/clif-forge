@@ -93,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
         "ventilation, organ support) from a small sample and exit without writing. "
         "Tune a recipe cheaply, then re-run without --preview to generate.",
     )
+    generate.add_argument(
+        "--write-truth",
+        action="store_true",
+        help="Also write generator-internal _truth.parquet (not a CLIF table). "
+        "Omit for shareable Dropbox/repo packages.",
+    )
 
     init = sub.add_parser(
         "init",
@@ -193,14 +199,22 @@ def _run_generate(args: argparse.Namespace) -> int:
             return 1
 
         chunk_size = getattr(args, "chunk_size", 10_000)
+        write_truth = bool(getattr(args, "write_truth", False))
         if n_patients > chunk_size:
             # Stream in bounded-memory batches (identical output, lower peak RAM).
             written = generate_streaming(
-                pack, args.out, n_patients=n_patients, seed=seed, chunk_size=chunk_size
+                pack,
+                args.out,
+                n_patients=n_patients,
+                seed=seed,
+                chunk_size=chunk_size,
+                write_truth=write_truth,
             )
         else:
             written = write_dataset(
-                generate_dataset(pack, n_patients=n_patients, seed=seed), args.out
+                generate_dataset(pack, n_patients=n_patients, seed=seed),
+                args.out,
+                write_truth=write_truth,
             )
         manifest_spec = dataclasses.asdict(spec) if spec is not None else "master"
         write_manifest(args.out, spec=manifest_spec, seed=seed)
