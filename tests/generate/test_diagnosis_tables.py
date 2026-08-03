@@ -98,10 +98,29 @@ def test_present_on_admission_tracks_when_the_failure_started() -> None:
 
     poa_of = {}
     for resp in (on_arrival, developed_later):
-        rows = sample_hospital_diagnosis(
-            _spine(24, resp=resp), pack, np.random.default_rng(3), admit_dttm=ADMIT
+        sp = SpineFrame(
+            hospitalization_id="H0",
+            support_level=[3] * 24,
+            resp_flag=resp,
+            cv_flag=[False] * 24,
+            renal_flag=[False] * 24,
+            neuro_flag=[False] * 24,
+            outcome="alive",
+            resp_phenotype="type1",
         )
-        poa_of[tuple(resp)] = next(r.poa_present for r in rows if r.diagnosis_code == "J96.00")
+        found = None
+        for seed in range(80):
+            rows = sample_hospital_diagnosis(
+                sp, pack, np.random.default_rng(seed), admit_dttm=ADMIT
+            )
+            secondary = [
+                r for r in rows if r.diagnosis_code == "J96.01" and r.diagnosis_primary == 0
+            ]
+            if secondary:
+                found = secondary[0].poa_present
+                break
+        assert found is not None
+        poa_of[tuple(resp)] = found
 
     assert poa_of[tuple(on_arrival)] == 1
     assert poa_of[tuple(developed_later)] == 0
