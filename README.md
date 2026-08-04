@@ -254,7 +254,7 @@ version, and per-table SHA-256 content hashes.
 whole-hospital population** — are too large to commit here. Download them directly:
 
 > 📥 **Full datasets (Dropbox):**
-> [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0)
+> [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/obihtw26jjoqeq6vt1roj/AEULjOoYNAN5rAx8Bar023w?rlkey=dsq4rzp3idsbt0gx75ylblhs0&dl=0)
 > — each dataset folder has **exactly 25** `clif_<table>_2.1_{beta|concept}.parquet` files plus `CONTENTS.json` (row counts + SHA-256). No `_truth` / `clif_truth`.
 
 They are also reproducible from a fitted pack on demand (see below), so the shared
