@@ -18,7 +18,7 @@ and model/agent development.
 Two ways to use it:
 1. **Grab the ready-made data** — realistic, CLIF 2.1-conformant samples are in the
    repo; full-size 85k-ICU and 365k whole-hospital masters (exactly 25 website-badged
-   `clif_*_2.1_{beta|concept}.parquet` tables, no truth spine) at https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0.
+   `clif_*_2.1_{beta|concept}.parquet` tables, no truth spine) at https://www.dropbox.com/scl/fo/obihtw26jjoqeq6vt1roj/AEULjOoYNAN5rAx8Bar023w?rlkey=dsq4rzp3idsbt0gx75ylblhs0&dl=0.
 2. **Make your own** — `pip install`, tweak a short recipe, and generate a *distinct*
    but still-realistic cohort. You control the levers: population shape (ICU vs.
    whole-hospital), size, demographics, illness rates (including rare-event ECMO via
@@ -54,7 +54,7 @@ teaching material, reproducible demos, and model or agent development.
    (an ICU cohort and a whole-hospital population) are committed in the repo — clone
    and go. Full-size masters (an 85k-encounter ICU cohort and a 365k whole-hospital
    population; exactly 25 website-badged `clif_*_2.1_{beta|concept}.parquet` tables,
-   no truth spine) are available at https://www.dropbox.com/scl/fo/qa31dkjw9hgw1ti63p44c/ALaD12MuUkw1FPb57pJwz3M?rlkey=zm3g3mbx8egzhtee52mqclldh&dl=0.
+   no truth spine) are available at https://www.dropbox.com/scl/fo/obihtw26jjoqeq6vt1roj/AEULjOoYNAN5rAx8Bar023w?rlkey=dsq4rzp3idsbt0gx75ylblhs0&dl=0.
 
 2. **Pull the levers and generate your own.** Each dataset is a *recipe* you can
    change. Install the package, edit a short TOML spec, and generate a cohort that is
