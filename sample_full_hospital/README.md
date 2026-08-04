@@ -6,7 +6,7 @@ population** — not just the ICU. Where `../sample_dataset/` is an ICU cohort
 sees, with realistic patient flow.
 
 - **5,000 encounters**, the **25** website-badged beta/concept CLIF 2.1 tables only
-  (no `_truth.parquet`; untiered DDL tables omitted from deliverable parquet).
+  (untiered DDL tables omitted from deliverable parquet).
 - Built from **`icu_all28`** (fitted clinical tables) through the validated
   **`recalibrate_to_full_hospital`** path (coupled `admission_route_marginal` →
   ADT front door + ward-dominant peak acuity).

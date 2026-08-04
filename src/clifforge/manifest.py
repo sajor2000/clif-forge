@@ -36,8 +36,8 @@ def write_manifest(out_dir: str | Path, *, spec: dict[str, Any] | str, seed: int
     """Write ``manifest.json`` into ``out_dir`` and return it.
 
     ``spec`` is the resolved variant spec (a dict) or the string ``"master"``.
-    Every ``*.parquet`` in the directory contributes a ``{rows, sha256}`` entry — the
-    ``clif_<table>_2.1_<maturity>`` files and the non-CLIF ``_truth`` spine alike, so
+    Every ``*.parquet`` in the directory contributes a ``{rows, sha256}`` entry —
+    share packages contain only ``clif_<table>_2.1_<maturity>`` files, so
     the whole deliverable is hash-auditable.
     """
     out = Path(out_dir)

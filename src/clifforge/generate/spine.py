@@ -7,8 +7,8 @@ generator reads ``(spine, param_pack, rng)`` and never another table's output,
 which is what pairs vasopressors with hypotension, sedation with IMV, and prone
 with severe hypoxemia while keeping the generators decoupled in code.
 
-The spine is *not* a CLIF table. It is optionally retained as ``_truth.parquet``
-for benchmarking (free ground-truth acuity/flag/outcome labels).
+The spine is *not* a CLIF table and is never written to share packages — it
+exists only in memory as the cross-table coupling channel during generation.
 
 Everything here is sampled offline from the parameter pack the fit stage (U5)
 emits — no real data is present. The pack's ``spine`` block supplies every input:
@@ -481,7 +481,7 @@ def _sample_outcome(params: dict[str, Any], peak_level: int, rng: np.random.Gene
 
 
 def truth_frame(spines: list[SpineFrame]) -> pl.DataFrame:
-    """Stack sampled spines into one long ``_truth`` frame for benchmarking."""
+    """Stack sampled spines into one long frame (in-memory API / tests only)."""
     if not spines:
         return pl.DataFrame(
             schema={

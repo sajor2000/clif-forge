@@ -30,12 +30,12 @@ deterioration, ADT front-door arrivals). Full-hospital mode uses
   vendored in `clifforge.reference.dashboard_priors` (retrieved 2026-08-02).
 - **derived** — folded from a parent table's keys (`organism_id`, `med_order_id`).
 
-## Latent spine (`_truth.parquet`)
+## Latent spine (in-memory)
 
-Not a CLIF table. Per-interval support level (0–5), organ-failure flags
-(`resp` / `cv` / `renal` / `neuro`), outcome, `admission_route`, and
-`resp_phenotype`. Downstream generators **read the spine**; they do not invent
-acuity or pathways themselves.
+Not a CLIF table and not written to disk. Per-interval support level (0–5),
+organ-failure flags (`resp` / `cv` / `renal` / `neuro`), outcome,
+`admission_route`, and `resp_phenotype`. Downstream generators **read the
+spine**; they do not invent acuity or pathways themselves.
 
 | Field | Meaning |
 |-------|---------|

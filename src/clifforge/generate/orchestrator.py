@@ -117,10 +117,9 @@ from clifforge.generate.tables.vitals import sample_vitals, vitals_frame
 
 __all__ = ["TRUTH_FILENAME", "GeneratedDataset", "generate_dataset", "write_dataset"]
 
-#: Filename for the retained latent spine. It deliberately does **not** carry the
-#: ``clif_`` prefix: the spine is not a CLIF table, and every ``clif_*.parquet`` in
-#: an output directory must be a real CLIF 2.1 table
-#: (``clif_<table>_2.1_<beta|concept>.parquet``).
+#: Historical / banned share-package name for a spine dump. Generators never write
+#: this file; :mod:`scripts.audit_share_package` rejects it if present. Kept so
+#: callers and tests can assert the forbidden name explicitly.
 TRUTH_FILENAME = "_truth.parquet"
 
 #: Admissions are spread across a two-year calendar at second resolution, so
@@ -254,7 +253,11 @@ _DERIVED_REGISTRY: tuple[tuple[str, tuple[str, ...], Any, Any], ...] = (
 
 @dataclass(frozen=True)
 class GeneratedDataset:
-    """A complete synthetic dataset: table name -> frame, plus the truth spine."""
+    """A complete synthetic dataset: table name -> frame, plus in-memory spine.
+
+    ``truth`` is the stacked latent spine used during generation (not a CLIF
+    table and not written to disk by :func:`write_dataset`).
+    """
 
     tables: dict[str, pl.DataFrame]
     truth: pl.DataFrame
@@ -368,14 +371,11 @@ def _generate_frames(
 def write_dataset(
     dataset: GeneratedDataset,
     out_dir: str | Path,
-    *,
-    write_truth: bool = False,
 ) -> list[Path]:
     """Write deliverable CLIF tables as ``clif_<table>_2.1_{beta|concept}.parquet``.
 
     Tables without a website beta/concept badge are generated in memory but
-    omitted from disk. Optionally writes ``_truth.parquet`` (generator-internal;
-    not a CLIF table — omit from share packages).
+    omitted from disk. The latent spine is never written.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -385,10 +385,6 @@ def write_dataset(
             continue
         path = table_parquet_path(out, name)
         frame.write_parquet(path)
-        written.append(path)
-    if write_truth:
-        path = out / TRUTH_FILENAME
-        dataset.truth.write_parquet(path)
         written.append(path)
     return written
 
@@ -401,7 +397,6 @@ def generate_streaming(
     seed: int = 42,
     id_offset: int = 0,
     chunk_size: int = 10_000,
-    write_truth: bool = False,
 ) -> list[Path]:
     """Generate a large cohort with bounded memory, writing directly to ``out_dir``.
 
@@ -410,10 +405,9 @@ def generate_streaming(
     seed and id regardless of ``chunk_size`` (see :func:`_generate_frames`) — but
     only ``chunk_size`` encounters are ever held in memory at once. Each batch is
     gated and written to a per-table part file; the parts are then streamed into one
-    ``clif_<table>_2.1_{beta|concept}.parquet`` each (plus optional ``_truth.parquet``)
-    and removed. Untiered tables are skipped at write time. ``chunk_size`` is the
-    memory dial: smaller uses less RAM (and runs a touch slower). Returns the
-    written paths. Share packages should leave ``write_truth=False``.
+    ``clif_<table>_2.1_{beta|concept}.parquet`` each and removed. Untiered tables
+    are skipped at write time. ``chunk_size`` is the memory dial: smaller uses less
+    RAM (and runs a touch slower). Returns the written paths.
     """
     if n_patients <= 0:
         raise ValueError("n_patients must be a positive integer")
@@ -432,18 +426,13 @@ def generate_streaming(
     ]
     # patient + hospitalization are always beta; still filter for safety
     table_names = [n for n in table_names if is_deliverable_table(n)]
-    if write_truth:
-        table_names.append("truth")
 
     n_chunks = (n_patients + chunk_size - 1) // chunk_size
     for c in range(n_chunks):
         lo, hi = c * chunk_size, min((c + 1) * chunk_size, n_patients)
-        tables, spines = _generate_frames(pack, child_seeds[lo:hi], id_offset + lo)
-        batch = (
-            {**tables, "truth": enforce_numeric_ids(truth_frame(spines))} if write_truth else tables
-        )
-        for name, frame in batch.items():
-            if name != "truth" and not is_deliverable_table(name):
+        tables, _spines = _generate_frames(pack, child_seeds[lo:hi], id_offset + lo)
+        for name, frame in tables.items():
+            if not is_deliverable_table(name):
                 continue
             (parts / name).mkdir(parents=True, exist_ok=True)
             frame.write_parquet(parts / name / f"part_{c:05d}.parquet")
@@ -451,7 +440,7 @@ def generate_streaming(
     written: list[Path] = []
     for name in table_names:
         part_files = sorted((parts / name).glob("part_*.parquet"))
-        dest = out / (TRUTH_FILENAME if name == "truth" else table_parquet_filename(name))
+        dest = out / table_parquet_filename(name)
         pl.scan_parquet(part_files).sink_parquet(dest)  # streamed concat, bounded memory
         written.append(dest)
     shutil.rmtree(parts, ignore_errors=True)
