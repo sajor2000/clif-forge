@@ -27,7 +27,7 @@ import streamlit as st
 from clifforge import __version__
 from clifforge.fit.param_pack import ParamPack
 from clifforge.generate.filenames import is_deliverable_table, table_parquet_path
-from clifforge.generate.orchestrator import TRUTH_FILENAME, generate_dataset
+from clifforge.generate.orchestrator import generate_dataset
 from clifforge.manifest import write_manifest
 from clifforge.preview import PREVIEW_SAMPLE, cohort_profile
 from clifforge.variants import (
@@ -174,7 +174,6 @@ def _generate_download(spec: VariantSpec) -> tuple[bytes, dict[str, Any]]:
             if not is_deliverable_table(name):
                 continue
             frame.write_parquet(table_parquet_path(out, name))
-        ds.truth.write_parquet(out / TRUTH_FILENAME)
         manifest = write_manifest(out, spec=dataclasses.asdict(spec), seed=spec.seed)
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -329,9 +328,9 @@ st.divider()
 st.header("Generate & download")
 st.markdown(
     f"Generates the full **{spec.n:,}-encounter** dataset — one "
-    "`clif_<table>_2.1_<beta|concept>.parquet` per CLIF table (share layout: "
-    "exactly the 25 website-badged tables; no `_truth.parquet`) and a "
-    "`manifest.json` (recipe, seed, per-table content hashes)."
+    "`clif_<table>_2.1_<beta|concept>.parquet` per CLIF table (exactly the 25 "
+    "website-badged tables) and a `manifest.json` (recipe, seed, per-table "
+    "content hashes)."
 )
 if spec.n > 15_000:
     st.info(

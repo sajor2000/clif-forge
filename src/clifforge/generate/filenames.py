@@ -10,7 +10,8 @@ tiered (``clinical_trial``, ``patient_diagnosis``, ``place_based_index``) are
 still generated in memory for tests, but are **omitted from disk** — deliverable
 writers never emit ``*_untiered`` or non-2.1 CLIF table files.
 
-The latent spine stays ``_truth.parquet`` and never takes the ``clif_`` prefix.
+The in-memory latent spine never takes the ``clif_`` prefix and is not written
+to share packages.
 
 The version token is major.minor (``2.1``), not the patch-level ``2.1.0``
 release string — maturity is a 2.1-era property, and the filename should stay

@@ -6,8 +6,7 @@ lets you inspect realistic, multi-table output and test code without generating
 anything or holding any credential.
 
 - **5,000 ICU encounters**, the **25** website-badged beta/concept CLIF 2.1 tables
-  only (no `_truth.parquet` — that spine is generator-internal, not a CLIF table).
-  Untiered DDL tables are omitted from deliverable parquet.
+  only. Untiered DDL tables are omitted from deliverable parquet.
 - Built from the **`icu_all28`** parameter pack (fit on local source CLIF extract)
   through the validated **`recalibrate_fitted_icu`** path: spine tempering, LOS
   sojourns, gated NIV, terminal deterioration, RF phenotypes, and ADT front-door

@@ -186,11 +186,8 @@ nonzero and writes nothing.
 
 Output is one `clif_<table>_2.1_<maturity>.parquet` per CLIF table — `beta` or
 `concept` from that table's CLIF maturity badge. Share packages are **exactly**
-those 25 website-badged tables (no extras). The latent acuity spine is
-generator-internal and is **not** written by default; pass `--write-truth` only
-when you need `_truth.parquet` for local benchmarking. The spine is **not** a
-CLIF table and deliberately does not carry the `clif_` prefix: every
-`clif_*.parquet` in a share directory is a real CLIF 2.1 table.
+those 25 website-badged tables (no extras). Every `clif_*.parquet` in a share
+directory is a real CLIF 2.1 table.
 
 **The id-type rule (hardcoded, applied to every dataset):** `patient_id`,
 `hospitalization_id`, and `hospitalization_joined_id` are always emitted as
@@ -255,7 +252,7 @@ whole-hospital population** — are too large to commit here. Download them dire
 
 > 📥 **Full datasets (Dropbox):**
 > [ICU 85k + whole-hospital 365k masters](https://www.dropbox.com/scl/fo/obihtw26jjoqeq6vt1roj/AEULjOoYNAN5rAx8Bar023w?rlkey=dsq4rzp3idsbt0gx75ylblhs0&dl=0)
-> — each dataset folder has **exactly 25** `clif_<table>_2.1_{beta|concept}.parquet` files plus `CONTENTS.json` (row counts + SHA-256). No `_truth` / `clif_truth`.
+> — each dataset folder has **exactly 25** `clif_<table>_2.1_{beta|concept}.parquet` files plus `CONTENTS.json` (row counts + SHA-256).
 
 They are also reproducible from a fitted pack on demand (see below), so the shared
 files and a local regeneration match by content hash.

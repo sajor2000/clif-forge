@@ -312,11 +312,11 @@ def test_conformance_failure_is_detected(pack: ParamPack) -> None:
         gate.validate(corrupt, "patient", run_secondary=False)
 
 
-def test_write_dataset_can_skip_truth(pack: ParamPack, tmp_path) -> None:
+def test_write_dataset_omits_spine(pack: ParamPack, tmp_path) -> None:
     from clifforge.generate.filenames import deliverable_tables
 
     ds = generate_dataset(pack, n_patients=4, seed=1)
-    written = write_dataset(ds, tmp_path, write_truth=False)
+    written = write_dataset(ds, tmp_path)
     assert not (tmp_path / "_truth.parquet").exists()
     assert len(written) == len(deliverable_tables())
     assert all(p.suffix == ".parquet" for p in written)
@@ -354,10 +354,9 @@ def test_cli_generate_writes_clif_layout(pack: ParamPack, tmp_path) -> None:
 def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path) -> None:
     """Nothing outside the CLIF 2.1.0 dictionary may claim a ``clif_`` filename.
 
-    The latent spine is generator internals, not a CLIF table — share packages omit
-    it; when written it must be ``_truth.parquet``, never ``clif_truth``.
+    The latent spine stays in memory only — never ``clif_truth`` or ``_truth``.
     """
-    write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path, write_truth=True)
+    write_dataset(generate_dataset(pack, n_patients=4, seed=1), tmp_path)
     emitted = {parse_table_from_stem(p.stem) for p in tmp_path.glob("clif_*.parquet")}
     assert None not in emitted
     assert emitted <= set(loader.dictionary_tables())
@@ -365,7 +364,7 @@ def test_clif_prefix_is_reserved_for_real_clif_tables(pack: ParamPack, tmp_path)
     stems = {p.stem for p in tmp_path.glob("clif_*.parquet")}
     assert table_parquet_filename("vitals").removesuffix(".parquet") in stems
     assert table_parquet_filename("provider").removesuffix(".parquet") in stems
-    assert (tmp_path / TRUTH_FILENAME).exists()
+    assert not (tmp_path / TRUTH_FILENAME).exists()
     assert not (tmp_path / "clif_truth.parquet").exists()
     assert not any("untiered" in p.name for p in tmp_path.glob("*.parquet"))
 
